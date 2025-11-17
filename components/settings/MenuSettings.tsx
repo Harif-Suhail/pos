@@ -9,8 +9,13 @@ import { formatCurrency } from '../../utils/helpers';
 const KITCHEN_STATIONS: KitchenStation[] = ['Main Kitchen', 'Bar', 'Desserts'];
 
 const CSV_FORMAT_INFO = `Required columns: name, category, basePrice, station.
-Optional columns: description, image, stock.
-Example: "Margherita Pizza","Pizzas",12.50,"Main Kitchen","Classic pizza","img_url.png",50`;
+Optional columns: description, image, stock, variants, modifiers.
+
+Advanced Features:
+- variants: "Small:10.00|Medium:12.50|Large:15.00"
+- modifiers: "Extra Cheese:2.00|Olives:1.50"
+
+Example: "Margherita Pizza","Pizzas",12.50,"Main Kitchen","Classic pizza","img_url.png",50,"Small:10.00|Medium:12.50|Large:15.00","Extra Cheese:2.00"`;
 
 // CSV Parser utility - handles quoted fields with commas
 const parseCSVLine = (line: string): string[] => {
@@ -60,6 +65,17 @@ const MenuSettings: React.FC = () => {
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [csvPreviewData, setCsvPreviewData] = useState<CSVImportRow[] | null>(null);
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+    
+    // New state for Priority 2 features
+    const [isDragging, setIsDragging] = useState(false);
+    const [editingCell, setEditingCell] = useState<{itemId: string, field: 'name' | 'basePrice' | 'stock'} | null>(null);
+    const [editValue, setEditValue] = useState<string>('');
+    
+    // New state for Priority 3 features
+    const [isPriceAdjustModalOpen, setIsPriceAdjustModalOpen] = useState(false);
+    const [priceAdjustType, setPriceAdjustType] = useState<'percentage' | 'fixed'>('percentage');
+    const [priceAdjustValue, setPriceAdjustValue] = useState<string>('');
+    const [priceAdjustOperation, setPriceAdjustOperation] = useState<'increase' | 'decrease'>('increase');
 
     const handleEdit = (item: MenuItem) => {
         setEditingItem(JSON.parse(JSON.stringify(item))); // Deep copy to avoid mutation
@@ -169,6 +185,54 @@ const MenuSettings: React.FC = () => {
 
                     let item: Omit<MenuItem, 'id' | 'tenantId'> | undefined;
                     if (errors.length === 0) {
+                        // Parse variants: "Small:10.00|Medium:12.50|Large:15.00"
+                        const variants: Variant[] = [];
+                        if (entry.variants && entry.variants.trim()) {
+                            const variantPairs = entry.variants.split('|');
+                            variantPairs.forEach((pair: string) => {
+                                const [name, priceStr] = pair.split(':');
+                                if (name && priceStr) {
+                                    const price = parseFloat(priceStr.trim());
+                                    if (!isNaN(price)) {
+                                        variants.push({
+                                            id: `v_${Date.now()}_${Math.random()}`,
+                                            name: name.trim(),
+                                            price
+                                        });
+                                    }
+                                }
+                            });
+                        }
+
+                        // Parse modifiers: "Extra Cheese:2.00|Olives:1.50"
+                        const modifierGroups: ModifierGroup[] = [];
+                        if (entry.modifiers && entry.modifiers.trim()) {
+                            const modifierPairs = entry.modifiers.split('|');
+                            const options: ModifierOption[] = [];
+                            modifierPairs.forEach((pair: string) => {
+                                const [name, priceStr] = pair.split(':');
+                                if (name && priceStr) {
+                                    const price = parseFloat(priceStr.trim());
+                                    if (!isNaN(price)) {
+                                        options.push({
+                                            id: `o_${Date.now()}_${Math.random()}`,
+                                            name: name.trim(),
+                                            price
+                                        });
+                                    }
+                                }
+                            });
+                            if (options.length > 0) {
+                                modifierGroups.push({
+                                    id: `g_${Date.now()}_${Math.random()}`,
+                                    name: 'Add-ons',
+                                    minSelection: 0,
+                                    maxSelection: options.length,
+                                    options
+                                });
+                            }
+                        }
+
                         item = {
                             name: entry.name,
                             category: entry.category,
@@ -177,8 +241,8 @@ const MenuSettings: React.FC = () => {
                             description: entry.description || '',
                             image: entry.image || '',
                             stock: entry.stock ? parseInt(entry.stock, 10) : undefined,
-                            variants: [],
-                            modifierGroups: [],
+                            variants,
+                            modifierGroups,
                             recipe: []
                         };
                     }
@@ -320,6 +384,99 @@ const MenuSettings: React.FC = () => {
         }
     };
 
+    // Download CSV template
+    const handleDownloadTemplate = () => {
+        const templateContent = `name,category,basePrice,station,description,image,stock,variants,modifiers
+"Margherita Pizza","Pizzas",12.50,"Main Kitchen","Classic tomato and mozzarella pizza","https://example.com/image.jpg",50,"Small:10.00|Medium:12.50|Large:15.00","Extra Cheese:2.00|Olives:1.50"
+"Caesar Salad","Salads",8.99,"Main Kitchen","Fresh romaine lettuce with parmesan","",30,"","Grilled Chicken:3.00|Shrimp:4.00"
+"Mojito","Beverages",7.50,"Bar","Refreshing mint cocktail","",,"Regular:7.50|Virgin:5.50",""
+"Cheesecake","Desserts",6.00,"Desserts","New York style cheesecake","",20,"","Strawberry Topping:1.00"`;
+
+        const blob = new Blob([templateContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'menu_import_template.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        addToast('Template downloaded successfully!', 'success');
+    };
+
+    // Bulk price adjustment
+    const handleBulkPriceAdjust = async () => {
+        if (selectedItems.size === 0) {
+            addToast('Please select items to adjust prices', 'warning');
+            return;
+        }
+
+        const adjustValue = parseFloat(priceAdjustValue);
+        if (isNaN(adjustValue) || adjustValue <= 0) {
+            addToast('Please enter a valid adjustment value', 'error');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            for (const itemId of Array.from(selectedItems)) {
+                const item = menuItems.find(i => i.id === itemId);
+                if (item) {
+                    let newPrice = item.basePrice;
+                    
+                    if (priceAdjustType === 'percentage') {
+                        if (priceAdjustOperation === 'increase') {
+                            newPrice = item.basePrice * (1 + adjustValue / 100);
+                        } else {
+                            newPrice = item.basePrice * (1 - adjustValue / 100);
+                        }
+                    } else {
+                        if (priceAdjustOperation === 'increase') {
+                            newPrice = item.basePrice + adjustValue;
+                        } else {
+                            newPrice = item.basePrice - adjustValue;
+                        }
+                    }
+
+                    // Ensure price doesn't go negative
+                    newPrice = Math.max(0, newPrice);
+                    
+                    // Round to 2 decimal places
+                    newPrice = Math.round(newPrice * 100) / 100;
+
+                    // Update variants if they exist
+                    let updatedVariants = item.variants;
+                    if (item.variants && item.variants.length > 0) {
+                        updatedVariants = item.variants.map(v => {
+                            let variantPrice = v.price;
+                            if (priceAdjustType === 'percentage') {
+                                variantPrice = priceAdjustOperation === 'increase' 
+                                    ? v.price * (1 + adjustValue / 100)
+                                    : v.price * (1 - adjustValue / 100);
+                            } else {
+                                variantPrice = priceAdjustOperation === 'increase'
+                                    ? v.price + adjustValue
+                                    : v.price - adjustValue;
+                            }
+                            return { ...v, price: Math.max(0, Math.round(variantPrice * 100) / 100) };
+                        });
+                    }
+
+                    await api.saveMenuItem({ ...item, basePrice: newPrice, variants: updatedVariants });
+                }
+            }
+            await syncData();
+            addToast(`Prices adjusted for ${selectedItems.size} items!`, 'success');
+            setIsPriceAdjustModalOpen(false);
+            setSelectedItems(new Set());
+            setPriceAdjustValue('');
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Filter and search
     const filteredItems = menuItems.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -327,6 +484,113 @@ const MenuSettings: React.FC = () => {
         const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
         return matchesSearch && matchesCategory;
     });
+
+    // Drag and drop handlers
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                // Simulate file input change
+                const event = {
+                    target: { files: [file] }
+                } as any;
+                handleFileImport(event);
+            } else {
+                addToast('Please drop a CSV file', 'error');
+            }
+        }
+    };
+
+    // Duplicate item
+    const handleDuplicate = async (item: MenuItem) => {
+        const duplicatedItem = {
+            ...item,
+            name: `${item.name} (Copy)`,
+            id: undefined,
+            tenantId: undefined
+        };
+        delete (duplicatedItem as any).id;
+        delete (duplicatedItem as any).tenantId;
+        
+        setIsLoading(true);
+        try {
+            await api.saveMenuItem(duplicatedItem as any);
+            await syncData();
+            addToast(`"${item.name}" duplicated successfully!`, 'success');
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Inline editing
+    const handleStartEdit = (itemId: string, field: 'name' | 'basePrice' | 'stock', currentValue: any) => {
+        setEditingCell({ itemId, field });
+        setEditValue(currentValue?.toString() || '');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingCell(null);
+        setEditValue('');
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingCell) return;
+        
+        const item = menuItems.find(i => i.id === editingCell.itemId);
+        if (!item) return;
+
+        let updatedItem = { ...item };
+        
+        if (editingCell.field === 'name') {
+            if (!editValue.trim()) {
+                addToast('Name cannot be empty', 'error');
+                return;
+            }
+            updatedItem.name = editValue.trim();
+        } else if (editingCell.field === 'basePrice') {
+            const price = parseFloat(editValue);
+            if (isNaN(price) || price < 0) {
+                addToast('Invalid price', 'error');
+                return;
+            }
+            updatedItem.basePrice = price;
+        } else if (editingCell.field === 'stock') {
+            const stock = editValue.trim() === '' ? undefined : parseInt(editValue, 10);
+            if (stock !== undefined && (isNaN(stock) || stock < 0)) {
+                addToast('Invalid stock value', 'error');
+                return;
+            }
+            updatedItem.stock = stock;
+        }
+
+        setIsLoading(true);
+        try {
+            await api.saveMenuItem(updatedItem);
+            await syncData();
+            addToast('Item updated successfully!', 'success');
+            handleCancelEdit();
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
     
     return (
         <div className="bg-[var(--background-secondary)] p-6 rounded-lg shadow-lg">
@@ -334,17 +598,23 @@ const MenuSettings: React.FC = () => {
                 <h2 className="text-xl font-bold text-[var(--text-primary)]">Menu Management</h2>
                 <div className="flex items-center gap-2 flex-wrap">
                     <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".csv" />
+                    <button onClick={handleDownloadTemplate} className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        Template
+                    </button>
                     <button onClick={handleExportCSV} className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
-                        Export CSV
+                        Export
                     </button>
                     <button onClick={() => fileInputRef.current?.click()} className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
-                        Import CSV
+                        Import
                     </button>
                     <button onClick={() => setIsInfoModalOpen(true)} className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] w-8 h-8 flex items-center justify-center rounded-full border border-[var(--border-color)]">?</button>
                     <button onClick={handleAddNew} className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--accent-primary-text)] font-bold py-2 px-4 rounded-lg">
@@ -382,6 +652,12 @@ const MenuSettings: React.FC = () => {
                         >
                             Delete ({selectedItems.size})
                         </button>
+                        <button
+                            onClick={() => setIsPriceAdjustModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                        >
+                            Adjust Prices
+                        </button>
                         <select
                             onChange={(e) => {
                                 if (e.target.value) {
@@ -398,6 +674,58 @@ const MenuSettings: React.FC = () => {
                         </select>
                     </div>
                 )}
+            </div>
+
+            {/* Category Filter Chips */}
+            <div className="mb-4 flex gap-2 flex-wrap">
+                <button
+                    onClick={() => setCategoryFilter('all')}
+                    className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                        categoryFilter === 'all' 
+                            ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' 
+                            : 'bg-[var(--background-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--background-interactive)]'
+                    }`}
+                >
+                    All ({menuItems.length})
+                </button>
+                {menuCategories.map(cat => {
+                    const count = menuItems.filter(item => item.category === cat).length;
+                    return (
+                        <button
+                            key={cat}
+                            onClick={() => setCategoryFilter(cat)}
+                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                                categoryFilter === cat 
+                                    ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' 
+                                    : 'bg-[var(--background-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--background-interactive)]'
+                            }`}
+                        >
+                            {cat} ({count})
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Drag and Drop Zone */}
+            <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`mb-4 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragging 
+                        ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10' 
+                        : 'border-[var(--border-color)] bg-[var(--background-tertiary)]'
+                }`}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="text-[var(--text-primary)] font-medium">
+                    {isDragging ? 'Drop CSV file here' : 'Drag and drop CSV file here'}
+                </p>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">
+                    or click Import CSV button above
+                </p>
             </div>
 
             {/* Results count */}
@@ -421,6 +749,7 @@ const MenuSettings: React.FC = () => {
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Item</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Category</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Price</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Stock</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-[var(--text-secondary)] uppercase">Actions</th>
                         </tr>
                     </thead>
@@ -435,12 +764,97 @@ const MenuSettings: React.FC = () => {
                                         className="rounded"
                                     />
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-[var(--text-primary)] font-medium">{item.name}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-[var(--text-primary)] font-medium">
+                                    {editingCell?.itemId === item.id && editingCell.field === 'name' ? (
+                                        <div className="flex gap-1">
+                                            <input
+                                                type="text"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEdit();
+                                                    if (e.key === 'Escape') handleCancelEdit();
+                                                }}
+                                                className="bg-[var(--background-tertiary)] px-2 py-1 rounded border border-[var(--accent-primary)] w-full"
+                                                autoFocus
+                                            />
+                                            <button onClick={handleSaveEdit} className="text-green-500 hover:opacity-80 px-1">✓</button>
+                                            <button onClick={handleCancelEdit} className="text-[var(--negative)] hover:opacity-80 px-1">✕</button>
+                                        </div>
+                                    ) : (
+                                        <span
+                                            onDoubleClick={() => handleStartEdit(item.id, 'name', item.name)}
+                                            className="cursor-pointer hover:underline"
+                                            title="Double-click to edit"
+                                        >
+                                            {item.name}
+                                        </span>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-[var(--text-tertiary)]">{item.category}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-[var(--text-tertiary)]">
-                                    {item.variants && item.variants.length > 0 ? `${formatCurrency(item.variants[0].price)}+` : formatCurrency(item.basePrice)}
+                                    {editingCell?.itemId === item.id && editingCell.field === 'basePrice' ? (
+                                        <div className="flex gap-1">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEdit();
+                                                    if (e.key === 'Escape') handleCancelEdit();
+                                                }}
+                                                className="bg-[var(--background-tertiary)] px-2 py-1 rounded border border-[var(--accent-primary)] w-24"
+                                                autoFocus
+                                            />
+                                            <button onClick={handleSaveEdit} className="text-green-500 hover:opacity-80 px-1">✓</button>
+                                            <button onClick={handleCancelEdit} className="text-[var(--negative)] hover:opacity-80 px-1">✕</button>
+                                        </div>
+                                    ) : (
+                                        <span
+                                            onDoubleClick={() => handleStartEdit(item.id, 'basePrice', item.basePrice)}
+                                            className="cursor-pointer hover:underline"
+                                            title="Double-click to edit"
+                                        >
+                                            {item.variants && item.variants.length > 0 ? `${formatCurrency(item.variants[0].price)}+` : formatCurrency(item.basePrice)}
+                                        </span>
+                                    )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+                                <td className="px-6 py-4 whitespace-nowrap text-[var(--text-tertiary)]">
+                                    {editingCell?.itemId === item.id && editingCell.field === 'stock' ? (
+                                        <div className="flex gap-1">
+                                            <input
+                                                type="number"
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEdit();
+                                                    if (e.key === 'Escape') handleCancelEdit();
+                                                }}
+                                                className="bg-[var(--background-tertiary)] px-2 py-1 rounded border border-[var(--accent-primary)] w-20"
+                                                autoFocus
+                                            />
+                                            <button onClick={handleSaveEdit} className="text-green-500 hover:opacity-80 px-1">✓</button>
+                                            <button onClick={handleCancelEdit} className="text-[var(--negative)] hover:opacity-80 px-1">✕</button>
+                                        </div>
+                                    ) : (
+                                        <span
+                                            onDoubleClick={() => handleStartEdit(item.id, 'stock', item.stock)}
+                                            className="cursor-pointer hover:underline"
+                                            title="Double-click to edit"
+                                        >
+                                            {item.stock !== undefined ? item.stock : '-'}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                                    <button 
+                                        onClick={() => handleDuplicate(item)} 
+                                        className="text-blue-500 hover:opacity-80"
+                                        title="Duplicate item"
+                                    >
+                                        Copy
+                                    </button>
                                     <button onClick={() => handleEdit(item)} className="text-[var(--accent-primary)] hover:opacity-80">Edit</button>
                                     <button onClick={() => handleDelete(item.id)} className="text-[var(--negative)] hover:opacity-80">Delete</button>
                                 </td>
@@ -556,6 +970,91 @@ const MenuSettings: React.FC = () => {
                             >
                                 {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
                                 Import {csvPreviewData.filter(r => r.errors.length === 0).length} Valid Items
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Bulk Price Adjustment Modal */}
+            {isPriceAdjustModalOpen && (
+                <Modal isOpen={isPriceAdjustModalOpen} onClose={() => setIsPriceAdjustModalOpen(false)} title="Bulk Price Adjustment" size="lg">
+                    <div className="space-y-4">
+                        <p className="text-sm text-[var(--text-secondary)]">
+                            Adjusting prices for {selectedItems.size} selected item{selectedItems.size > 1 ? 's' : ''}. Changes will apply to base prices and all variants.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Adjustment Type</label>
+                                <select
+                                    value={priceAdjustType}
+                                    onChange={(e) => setPriceAdjustType(e.target.value as 'percentage' | 'fixed')}
+                                    className="w-full bg-[var(--background-tertiary)] rounded-lg p-2 text-[var(--text-primary)]"
+                                >
+                                    <option value="percentage">Percentage (%)</option>
+                                    <option value="fixed">Fixed Amount</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Operation</label>
+                                <select
+                                    value={priceAdjustOperation}
+                                    onChange={(e) => setPriceAdjustOperation(e.target.value as 'increase' | 'decrease')}
+                                    className="w-full bg-[var(--background-tertiary)] rounded-lg p-2 text-[var(--text-primary)]"
+                                >
+                                    <option value="increase">Increase</option>
+                                    <option value="decrease">Decrease</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                                Value {priceAdjustType === 'percentage' ? '(%)' : '($)'}
+                            </label>
+                            <input
+                                type="number"
+                                step={priceAdjustType === 'percentage' ? '1' : '0.01'}
+                                value={priceAdjustValue}
+                                onChange={(e) => setPriceAdjustValue(e.target.value)}
+                                placeholder={priceAdjustType === 'percentage' ? 'e.g., 10' : 'e.g., 2.50'}
+                                className="w-full bg-[var(--background-tertiary)] rounded-lg p-2 text-[var(--text-primary)]"
+                            />
+                        </div>
+
+                        {priceAdjustValue && !isNaN(parseFloat(priceAdjustValue)) && (
+                            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                <p className="text-sm text-[var(--text-primary)]">
+                                    <strong>Preview:</strong> {priceAdjustType === 'percentage' ? `${priceAdjustOperation === 'increase' ? '+' : '-'}${priceAdjustValue}%` : `${priceAdjustOperation === 'increase' ? '+' : '-'}$${priceAdjustValue}`}
+                                </p>
+                                <p className="text-xs text-[var(--text-secondary)] mt-1">
+                                    Example: $10.00 → ${priceAdjustType === 'percentage' 
+                                        ? (priceAdjustOperation === 'increase' ? (10 * (1 + parseFloat(priceAdjustValue) / 100)).toFixed(2) : (10 * (1 - parseFloat(priceAdjustValue) / 100)).toFixed(2))
+                                        : (priceAdjustOperation === 'increase' ? (10 + parseFloat(priceAdjustValue)).toFixed(2) : (10 - parseFloat(priceAdjustValue)).toFixed(2))
+                                    }
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-4 border-t border-[var(--border-color)]">
+                            <button
+                                onClick={() => {
+                                    setIsPriceAdjustModalOpen(false);
+                                    setPriceAdjustValue('');
+                                }}
+                                className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleBulkPriceAdjust}
+                                disabled={!priceAdjustValue || isNaN(parseFloat(priceAdjustValue)) || parseFloat(priceAdjustValue) <= 0 || isLoading}
+                                className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--accent-primary-text)] font-bold py-2 px-4 rounded-lg disabled:bg-[var(--disabled)] disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+                                Apply Adjustment
                             </button>
                         </div>
                     </div>
