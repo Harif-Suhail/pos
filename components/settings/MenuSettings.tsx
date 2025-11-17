@@ -12,6 +12,40 @@ const CSV_FORMAT_INFO = `Required columns: name, category, basePrice, station.
 Optional columns: description, image, stock.
 Example: "Margherita Pizza","Pizzas",12.50,"Main Kitchen","Classic pizza","img_url.png",50`;
 
+// CSV Parser utility - handles quoted fields with commas
+const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        
+        if (char === '"' && inQuotes && nextChar === '"') {
+            current += '"';
+            i++;
+        } else if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    return result;
+};
+
+interface CSVImportRow {
+    lineNumber: number;
+    data: any;
+    item?: Omit<MenuItem, 'id' | 'tenantId'>;
+    errors: string[];
+    warnings: string[];
+}
+
 const MenuSettings: React.FC = () => {
     const { menuItems, menuCategories, api, syncData, inventory, addToast } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
@@ -19,6 +53,13 @@ const MenuSettings: React.FC = () => {
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // New state for Priority 1 features
+    const [searchQuery, setSearchQuery] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+    const [csvPreviewData, setCsvPreviewData] = useState<CSVImportRow[] | null>(null);
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
     const handleEdit = (item: MenuItem) => {
         setEditingItem(JSON.parse(JSON.stringify(item))); // Deep copy to avoid mutation
@@ -80,66 +121,303 @@ const MenuSettings: React.FC = () => {
             const text = e.target?.result as string;
             try {
                 const lines = text.split('\n').filter(line => line.trim() !== '');
-                const headers = lines[0].split(',').map(h => h.trim());
+                if (lines.length < 2) {
+                    throw new Error('CSV file must contain at least a header row and one data row.');
+                }
+                
+                const headerLine = lines[0];
+                const headers = parseCSVLine(headerLine).map(h => h.trim().replace(/^"|"$/g, ''));
                 const requiredHeaders = ['name', 'category', 'basePrice', 'station'];
-                if (!requiredHeaders.every(h => headers.includes(h))) {
-                    throw new Error(`CSV must contain headers: ${requiredHeaders.join(', ')}`);
+                
+                const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+                if (missingHeaders.length > 0) {
+                    throw new Error(`CSV must contain headers: ${missingHeaders.join(', ')}`);
                 }
 
-                const itemsToImport: Omit<MenuItem, 'id' | 'tenantId'>[] = lines.slice(1).map(line => {
-                    const values = line.split(',');
+                // Parse and validate each row
+                const previewRows: CSVImportRow[] = lines.slice(1).map((line, idx) => {
+                    const values = parseCSVLine(line);
                     const entry: any = {};
-                    headers.forEach((header, i) => entry[header] = values[i]);
+                    const errors: string[] = [];
+                    const warnings: string[] = [];
+                    
+                    headers.forEach((header, i) => {
+                        entry[header] = values[i] ? values[i].replace(/^"|"$/g, '') : '';
+                    });
+
+                    // Validation
+                    if (!entry.name || !entry.name.trim()) {
+                        errors.push('Name is required');
+                    }
+                    if (!entry.category || !entry.category.trim()) {
+                        errors.push('Category is required');
+                    }
+                    if (!entry.basePrice || isNaN(parseFloat(entry.basePrice))) {
+                        errors.push('Valid base price is required');
+                    } else if (parseFloat(entry.basePrice) < 0) {
+                        errors.push('Price cannot be negative');
+                    }
+                    if (!entry.station || !entry.station.trim()) {
+                        errors.push('Station is required');
+                    } else if (!KITCHEN_STATIONS.includes(entry.station as KitchenStation)) {
+                        errors.push(`Invalid station. Must be one of: ${KITCHEN_STATIONS.join(', ')}`);
+                    }
+                    
+                    if (entry.stock && isNaN(parseInt(entry.stock, 10))) {
+                        warnings.push('Invalid stock value, will be ignored');
+                    }
+
+                    let item: Omit<MenuItem, 'id' | 'tenantId'> | undefined;
+                    if (errors.length === 0) {
+                        item = {
+                            name: entry.name,
+                            category: entry.category,
+                            basePrice: parseFloat(entry.basePrice),
+                            station: entry.station as KitchenStation,
+                            description: entry.description || '',
+                            image: entry.image || '',
+                            stock: entry.stock ? parseInt(entry.stock, 10) : undefined,
+                            variants: [],
+                            modifierGroups: [],
+                            recipe: []
+                        };
+                    }
 
                     return {
-                        name: entry.name,
-                        category: entry.category,
-                        basePrice: parseFloat(entry.basePrice),
-                        station: entry.station as KitchenStation,
-                        description: entry.description || '',
-                        image: entry.image || '',
-                        stock: entry.stock ? parseInt(entry.stock, 10) : undefined,
-                        variants: [],
-                        modifierGroups: [],
-                        recipe: []
+                        lineNumber: idx + 2,
+                        data: entry,
+                        item,
+                        errors,
+                        warnings
                     };
                 });
 
-                if(window.confirm(`Found ${itemsToImport.length} items to import. Proceed?`)) {
-                    setIsLoading(true);
-                    await api.bulkSaveMenuItems(itemsToImport);
-                    await syncData();
-                    addToast(`${itemsToImport.length} items imported successfully!`, 'success');
-                }
+                setCsvPreviewData(previewRows);
+                setIsPreviewModalOpen(true);
             } catch (error: any) {
                 addToast(`Import failed: ${error.message}`, 'error');
             } finally {
-                setIsLoading(false);
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
         };
         reader.readAsText(file);
     };
+
+    const handleConfirmImport = async () => {
+        if (!csvPreviewData) return;
+        
+        const validItems = csvPreviewData
+            .filter(row => row.errors.length === 0 && row.item)
+            .map(row => row.item!);
+
+        if (validItems.length === 0) {
+            addToast('No valid items to import', 'error');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            await api.bulkSaveMenuItems(validItems);
+            await syncData();
+            addToast(`${validItems.length} items imported successfully!`, 'success');
+            setIsPreviewModalOpen(false);
+            setCsvPreviewData(null);
+        } catch (error: any) {
+            addToast(`Import failed: ${error.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Export to CSV
+    const handleExportCSV = () => {
+        const headers = ['name', 'category', 'basePrice', 'station', 'description', 'image', 'stock'];
+        const csvContent = [
+            headers.join(','),
+            ...menuItems.map(item => {
+                const row = [
+                    `"${item.name.replace(/"/g, '""')}"`,
+                    `"${item.category.replace(/"/g, '""')}"`,
+                    item.basePrice,
+                    `"${item.station}"`,
+                    `"${(item.description || '').replace(/"/g, '""')}"`,
+                    `"${(item.image || '').replace(/"/g, '""')}"`,
+                    item.stock !== undefined ? item.stock : ''
+                ];
+                return row.join(',');
+            })
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `menu_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        addToast('Menu exported successfully!', 'success');
+    };
+
+    // Bulk actions
+    const handleSelectAll = () => {
+        if (selectedItems.size === filteredItems.length) {
+            setSelectedItems(new Set());
+        } else {
+            setSelectedItems(new Set(filteredItems.map(item => item.id)));
+        }
+    };
+
+    const handleSelectItem = (itemId: string) => {
+        const newSelected = new Set(selectedItems);
+        if (newSelected.has(itemId)) {
+            newSelected.delete(itemId);
+        } else {
+            newSelected.add(itemId);
+        }
+        setSelectedItems(newSelected);
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedItems.size === 0) return;
+        
+        if (window.confirm(`Are you sure you want to delete ${selectedItems.size} items?`)) {
+            setIsLoading(true);
+            try {
+                for (const itemId of Array.from(selectedItems)) {
+                    await api.deleteMenuItem(itemId as string);
+                }
+                await syncData();
+                addToast(`${selectedItems.size} items deleted successfully!`, 'success');
+                setSelectedItems(new Set());
+            } catch (e: any) {
+                addToast(`Error: ${e.message}`, 'error');
+            } finally {
+                setIsLoading(false);
+            }
+        }
+    };
+
+    const handleBulkUpdateCategory = async (newCategory: string) => {
+        if (selectedItems.size === 0 || !newCategory) return;
+        
+        setIsLoading(true);
+        try {
+            for (const itemId of Array.from(selectedItems)) {
+                const item = menuItems.find(i => i.id === itemId);
+                if (item) {
+                    await api.saveMenuItem({ ...item, category: newCategory });
+                }
+            }
+            await syncData();
+            addToast(`${selectedItems.size} items updated successfully!`, 'success');
+            setSelectedItems(new Set());
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Filter and search
+    const filteredItems = menuItems.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+        return matchesSearch && matchesCategory;
+    });
     
     return (
         <div className="bg-[var(--background-secondary)] p-6 rounded-lg shadow-lg">
             <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <h2 className="text-xl font-bold text-[var(--text-primary)]">Menu Management</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".csv" />
-                    <button onClick={() => fileInputRef.current?.click()} className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg text-sm">
-                        Import from CSV
+                    <button onClick={handleExportCSV} className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Export CSV
                     </button>
-                     <button onClick={() => setIsInfoModalOpen(true)} className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">?</button>
+                    <button onClick={() => fileInputRef.current?.click()} className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Import CSV
+                    </button>
+                    <button onClick={() => setIsInfoModalOpen(true)} className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] w-8 h-8 flex items-center justify-center rounded-full border border-[var(--border-color)]">?</button>
                     <button onClick={handleAddNew} className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--accent-primary-text)] font-bold py-2 px-4 rounded-lg">
                         Add New Item
                     </button>
                 </div>
             </div>
+
+            {/* Search and Filter Bar */}
+            <div className="mb-4 flex gap-3 flex-wrap">
+                <div className="flex-1 min-w-[200px]">
+                    <input
+                        type="text"
+                        placeholder="Search menu items..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-[var(--background-tertiary)] rounded-lg p-2 text-[var(--text-primary)] placeholder-[var(--text-tertiary)]"
+                    />
+                </div>
+                <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="bg-[var(--background-tertiary)] rounded-lg p-2 text-[var(--text-primary)]"
+                >
+                    <option value="all">All Categories</option>
+                    {menuCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                </select>
+                {selectedItems.size > 0 && (
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleBulkDelete}
+                            className="bg-[var(--negative)] hover:opacity-80 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                        >
+                            Delete ({selectedItems.size})
+                        </button>
+                        <select
+                            onChange={(e) => {
+                                if (e.target.value) {
+                                    handleBulkUpdateCategory(e.target.value);
+                                    e.target.value = '';
+                                }
+                            }}
+                            className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] rounded-lg px-3 text-sm"
+                        >
+                            <option value="">Change Category...</option>
+                            {menuCategories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+            </div>
+
+            {/* Results count */}
+            <div className="mb-2 text-sm text-[var(--text-secondary)]">
+                Showing {filteredItems.length} of {menuItems.length} items
+                {selectedItems.size > 0 && ` · ${selectedItems.size} selected`}
+            </div>
+
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-[var(--border-color)]">
                      <thead className="bg-[var(--background-secondary)]">
                         <tr>
+                            <th className="px-6 py-3 text-left">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedItems.size === filteredItems.length && filteredItems.length > 0}
+                                    onChange={handleSelectAll}
+                                    className="rounded"
+                                />
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Item</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Category</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Price</th>
@@ -147,8 +425,16 @@ const MenuSettings: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-color)]">
-                        {menuItems.map(item => (
-                            <tr key={item.id}>
+                        {filteredItems.map(item => (
+                            <tr key={item.id} className={selectedItems.has(item.id) ? 'bg-[var(--accent-primary)]/10' : ''}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.has(item.id)}
+                                        onChange={() => handleSelectItem(item.id)}
+                                        className="rounded"
+                                    />
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-[var(--text-primary)] font-medium">{item.name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-[var(--text-tertiary)]">{item.category}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-[var(--text-tertiary)]">
@@ -163,6 +449,13 @@ const MenuSettings: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            
+            {filteredItems.length === 0 && (
+                <div className="text-center py-8 text-[var(--text-secondary)]">
+                    {searchQuery || categoryFilter !== 'all' ? 'No items match your filters' : 'No menu items yet'}
+                </div>
+            )}
+            
              {isLoading && <div className="pt-4 flex justify-center"><Spinner /></div>}
 
             {isModalOpen && editingItem && (
@@ -175,6 +468,7 @@ const MenuSettings: React.FC = () => {
                     onSave={handleSave}
                 />
             )}
+            
             {isInfoModalOpen && (
                  <InputDialog
                     isOpen={isInfoModalOpen}
@@ -185,6 +479,87 @@ const MenuSettings: React.FC = () => {
                     initialValue={CSV_FORMAT_INFO.split('\n')[1]}
                     onConfirm={() => setIsInfoModalOpen(false)}
                 />
+            )}
+
+            {/* CSV Preview Modal */}
+            {isPreviewModalOpen && csvPreviewData && (
+                <Modal isOpen={isPreviewModalOpen} onClose={() => setIsPreviewModalOpen(false)} title="CSV Import Preview" size="4xl">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center p-3 bg-[var(--background-tertiary)] rounded-lg">
+                            <div>
+                                <p className="text-sm text-[var(--text-primary)]">
+                                    <span className="font-bold">{csvPreviewData.filter(r => r.errors.length === 0).length}</span> valid items, 
+                                    <span className="font-bold text-[var(--negative)] ml-1">{csvPreviewData.filter(r => r.errors.length > 0).length}</span> with errors
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div className="max-h-[60vh] overflow-y-auto">
+                            <table className="min-w-full divide-y divide-[var(--border-color)] text-sm">
+                                <thead className="bg-[var(--background-secondary)] sticky top-0">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)]">Line</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)]">Name</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)]">Category</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)]">Price</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)]">Station</th>
+                                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)]">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[var(--border-color)]">
+                                    {csvPreviewData.map((row, idx) => (
+                                        <tr key={idx} className={row.errors.length > 0 ? 'bg-red-500/10' : row.warnings.length > 0 ? 'bg-yellow-500/10' : ''}>
+                                            <td className="px-3 py-2 text-[var(--text-tertiary)]">{row.lineNumber}</td>
+                                            <td className="px-3 py-2 text-[var(--text-primary)]">{row.data.name || '-'}</td>
+                                            <td className="px-3 py-2 text-[var(--text-tertiary)]">{row.data.category || '-'}</td>
+                                            <td className="px-3 py-2 text-[var(--text-tertiary)]">{row.data.basePrice || '-'}</td>
+                                            <td className="px-3 py-2 text-[var(--text-tertiary)]">{row.data.station || '-'}</td>
+                                            <td className="px-3 py-2">
+                                                {row.errors.length > 0 ? (
+                                                    <div>
+                                                        <span className="text-[var(--negative)] font-medium">Error</span>
+                                                        <ul className="text-xs mt-1 list-disc list-inside">
+                                                            {row.errors.map((err, i) => <li key={i}>{err}</li>)}
+                                                        </ul>
+                                                    </div>
+                                                ) : row.warnings.length > 0 ? (
+                                                    <div>
+                                                        <span className="text-yellow-500 font-medium">Warning</span>
+                                                        <ul className="text-xs mt-1 list-disc list-inside">
+                                                            {row.warnings.map((warn, i) => <li key={i}>{warn}</li>)}
+                                                        </ul>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-green-500 font-medium">✓ Valid</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2 pt-4 border-t border-[var(--border-color)]">
+                            <button 
+                                onClick={() => {
+                                    setIsPreviewModalOpen(false);
+                                    setCsvPreviewData(null);
+                                }} 
+                                className="bg-[var(--background-interactive)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-bold py-2 px-4 rounded-lg"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleConfirmImport}
+                                disabled={csvPreviewData.filter(r => r.errors.length === 0).length === 0 || isLoading}
+                                className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary-hover)] text-[var(--accent-primary-text)] font-bold py-2 px-4 rounded-lg disabled:bg-[var(--disabled)] disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+                                Import {csvPreviewData.filter(r => r.errors.length === 0).length} Valid Items
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );
