@@ -10,11 +10,15 @@
   },
   "dependencies": {
     "@google/genai": "^1.29.1",
+    "chart.js": "^4.5.1",
     "react": "^19.2.0",
+    "react-chartjs-2": "^5.3.1",
+    "react-datepicker": "^8.9.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",
+    "@types/react-datepicker": "^7.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
