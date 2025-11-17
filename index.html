@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gemini POS - Restaurant Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background-primary: #F9FAFB;
+            --background-secondary: #FFFFFF;
+            --background-tertiary: #F3F4F6;
+            --background-interactive: #E5E7EB;
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --text-tertiary: #6B7280;
+            --border-color: #D1D5DB;
+            --accent-primary: #4F46E5;
+            --accent-primary-hover: #4338CA;
+            --accent-primary-text: #FFFFFF;
+            --accent-secondary: #2563EB;
+            --accent-secondary-hover: #1D4ED8;
+            --positive: #16A34A;
+            --positive-hover: #15803D;
+            --negative: #DC2626;
+            --negative-hover: #B91C1C;
+            --warning: #F59E0B;
+            --warning-hover: #D97706;
+            --disabled: #9CA3AF;
+            --status-available: #22C55E;
+            --status-occupied: #EF4444;
+            --info-text: #ca8a04;
+            --info-border: #eab308;
+        }
+        [data-theme='dark'] {
+            --background-primary: #111827;
+            --background-secondary: #1F2937;
+            --background-tertiary: #374151;
+            --background-interactive: #4B5563;
+            --text-primary: #F9FAFB;
+            --text-secondary: #9CA3AF;
+            --text-tertiary: #D1D5DB;
+            --border-color: #374151;
+            --accent-primary: #6366F1;
+            --accent-primary-hover: #4F46E5;
+            --accent-primary-text: #FFFFFF;
+            --accent-secondary: #3B82F6;
+            --accent-secondary-hover: #2563EB;
+            --positive: #22C55E;
+            --positive-hover: #16A34A;
+            --negative: #EF4444;
+            --negative-hover: #DC2626;
+            --warning: #F59E0B;
+            --warning-hover: #D97706;
+            --disabled: #4B5563;
+            --status-available: #22C55E;
+            --status-occupied: #EF4444;
+            --info-text: #facc15;
+            --info-border: #eab308;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-primary);
+            color: var(--text-primary);
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-receipt, #printable-receipt * {
+                visibility: visible;
+            }
+            #printable-receipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-[var(--background-primary)] text-[var(--text-primary)]">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
