@@ -94,6 +94,7 @@ const MenuSettings: React.FC = () => {
             modifierGroups: [],
             recipe: [],
             stock: undefined,
+            available: true, // New items are available by default
         });
         setIsModalOpen(true);
     };
@@ -591,6 +592,43 @@ const MenuSettings: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    // Toggle item availability
+    const handleToggleAvailability = async (item: MenuItem) => {
+        const newAvailability = item.available === false ? true : false;
+        setIsLoading(true);
+        try {
+            await api.saveMenuItem({ ...item, available: newAvailability });
+            await syncData();
+            addToast(`"${item.name}" marked as ${newAvailability ? 'available' : 'unavailable'}`, 'success');
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Bulk toggle availability
+    const handleBulkToggleAvailability = async (makeAvailable: boolean) => {
+        if (selectedItems.size === 0) return;
+        
+        setIsLoading(true);
+        try {
+            for (const itemId of Array.from(selectedItems)) {
+                const item = menuItems.find(i => i.id === itemId);
+                if (item) {
+                    await api.saveMenuItem({ ...item, available: makeAvailable });
+                }
+            }
+            await syncData();
+            addToast(`${selectedItems.size} items marked as ${makeAvailable ? 'available' : 'unavailable'}`, 'success');
+            setSelectedItems(new Set());
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
     
     return (
         <div className="bg-[var(--background-secondary)] p-6 rounded-lg shadow-lg">
@@ -657,6 +695,18 @@ const MenuSettings: React.FC = () => {
                             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm"
                         >
                             Adjust Prices
+                        </button>
+                        <button
+                            onClick={() => handleBulkToggleAvailability(false)}
+                            className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                        >
+                            Mark Unavailable
+                        </button>
+                        <button
+                            onClick={() => handleBulkToggleAvailability(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm"
+                        >
+                            Mark Available
                         </button>
                         <select
                             onChange={(e) => {
@@ -746,6 +796,7 @@ const MenuSettings: React.FC = () => {
                                     className="rounded"
                                 />
                             </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Item</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Category</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-[var(--text-secondary)] uppercase">Price</th>
@@ -754,8 +805,10 @@ const MenuSettings: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-color)]">
-                        {filteredItems.map(item => (
-                            <tr key={item.id} className={selectedItems.has(item.id) ? 'bg-[var(--accent-primary)]/10' : ''}>
+                        {filteredItems.map(item => {
+                            const isAvailable = item.available !== false; // Default to true if undefined
+                            return (
+                            <tr key={item.id} className={`${selectedItems.has(item.id) ? 'bg-[var(--accent-primary)]/10' : ''} ${!isAvailable ? 'opacity-60' : ''}`}>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <input
                                         type="checkbox"
@@ -763,6 +816,19 @@ const MenuSettings: React.FC = () => {
                                         onChange={() => handleSelectItem(item.id)}
                                         className="rounded"
                                     />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <button
+                                        onClick={() => handleToggleAvailability(item)}
+                                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                            isAvailable
+                                                ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30'
+                                                : 'bg-red-500/20 text-red-600 hover:bg-red-500/30'
+                                        }`}
+                                        title={isAvailable ? 'Click to mark as unavailable' : 'Click to mark as available'}
+                                    >
+                                        {isAvailable ? '● Available' : '● Unavailable'}
+                                    </button>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-[var(--text-primary)] font-medium">
                                     {editingCell?.itemId === item.id && editingCell.field === 'name' ? (
@@ -859,7 +925,8 @@ const MenuSettings: React.FC = () => {
                                     <button onClick={() => handleDelete(item.id)} className="text-[var(--negative)] hover:opacity-80">Delete</button>
                                 </td>
                             </tr>
-                        ))}
+                        );
+                        })}
                     </tbody>
                 </table>
             </div>

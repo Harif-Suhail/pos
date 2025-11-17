@@ -8,17 +8,24 @@ interface MenuGridProps {
 
 const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) => void }> = ({ item, onSelectItem }) => {
     const isOutOfStock = item.stock !== undefined && item.stock <= 0;
+    const isUnavailable = item.available === false;
+    const isDisabled = isOutOfStock || isUnavailable;
 
     return (
         <button 
             onClick={() => onSelectItem(item)} 
-            className={`relative bg-[var(--background-secondary)] rounded-lg shadow-lg overflow-hidden text-left transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:ring-opacity-75 ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'transform hover:-translate-y-1'}`}
+            className={`relative bg-[var(--background-secondary)] rounded-lg shadow-lg overflow-hidden text-left transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:ring-opacity-75 ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'transform hover:-translate-y-1'}`}
             aria-label={`Add ${item.name} to order`}
-            disabled={isOutOfStock}
+            disabled={isDisabled}
         >
             {isOutOfStock && (
                 <div className="absolute top-2 right-2 bg-[var(--negative)] text-[var(--accent-primary-text)] text-xs font-bold px-2 py-1 rounded-full z-10">
                     Out of Stock
+                </div>
+            )}
+            {isUnavailable && !isOutOfStock && (
+                <div className="absolute top-2 right-2 bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+                    Unavailable
                 </div>
             )}
             <img src={item.image} alt={item.name} className="w-full h-32 object-cover" />

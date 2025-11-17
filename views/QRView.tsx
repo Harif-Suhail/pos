@@ -111,7 +111,10 @@ export default function QRView({ tableId }: QRViewProps) {
     };
 
     const filteredMenuItems = useMemo(() =>
-        menuItems.filter(item => item.category === selectedCategory),
+        menuItems.filter(item => 
+            item.category === selectedCategory && 
+            item.available !== false // Only show available items
+        ),
         [selectedCategory, menuItems]
     );
 

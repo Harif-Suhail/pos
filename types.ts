@@ -123,6 +123,7 @@ export interface MenuItem {
   modifierGroups?: ModifierGroup[];
   recipe?: RecipeComponent[];
   stock?: number; // Simple stock for items without recipes
+  available?: boolean; // Whether item is currently available for ordering
 }
 
 
