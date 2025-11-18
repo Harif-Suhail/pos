@@ -55,7 +55,132 @@ export interface Outlet {
   floorPlan: FloorPlanObject[];
 }
 
-export type UserRole = 'BrandAdmin' | 'OutletManager' | 'Cashier' | 'KitchenStaff' | 'Accountant';
+export type UserRole = 'BrandAdmin' | 'OutletManager' | 'Cashier' | 'Waiter' | 'KitchenStaff' | 'Accountant';
+
+// Permissions enum for fine-grained access control
+export enum Permission {
+  // Billing & Payment
+  CAN_PROCESS_PAYMENT = 'CAN_PROCESS_PAYMENT',
+  CAN_VIEW_ORDERS = 'CAN_VIEW_ORDERS',
+  
+  // Order Management
+  CAN_CREATE_ORDER = 'CAN_CREATE_ORDER',
+  CAN_MODIFY_ORDER = 'CAN_MODIFY_ORDER',
+  CAN_CANCEL_ORDER = 'CAN_CANCEL_ORDER',
+  CAN_PARK_ORDER = 'CAN_PARK_ORDER',
+  
+  // Pricing & Discounts
+  CAN_APPLY_DISCOUNT = 'CAN_APPLY_DISCOUNT',
+  CAN_CHANGE_PRICE = 'CAN_CHANGE_PRICE',
+  
+  // Menu & Inventory
+  CAN_MANAGE_MENU = 'CAN_MANAGE_MENU',
+  CAN_MANAGE_INVENTORY = 'CAN_MANAGE_INVENTORY',
+  CAN_VIEW_INVENTORY = 'CAN_VIEW_INVENTORY',
+  
+  // Reports & Analytics
+  CAN_VIEW_REPORTS = 'CAN_VIEW_REPORTS',
+  CAN_VIEW_ALL_OUTLETS = 'CAN_VIEW_ALL_OUTLETS',
+  
+  // Settings
+  CAN_MANAGE_USERS = 'CAN_MANAGE_USERS',
+  CAN_MANAGE_SETTINGS = 'CAN_MANAGE_SETTINGS',
+  CAN_MANAGE_FLOOR_PLAN = 'CAN_MANAGE_FLOOR_PLAN',
+  
+  // Shifts
+  CAN_MANAGE_SHIFTS = 'CAN_MANAGE_SHIFTS',
+  CAN_VIEW_SHIFTS = 'CAN_VIEW_SHIFTS',
+  
+  // Kitchen
+  CAN_VIEW_KDS = 'CAN_VIEW_KDS',
+  CAN_MARK_ORDER_READY = 'CAN_MARK_ORDER_READY',
+}
+
+// Role-based permission mappings
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  BrandAdmin: [
+    // Full access - all permissions
+    Permission.CAN_PROCESS_PAYMENT,
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_CREATE_ORDER,
+    Permission.CAN_MODIFY_ORDER,
+    Permission.CAN_CANCEL_ORDER,
+    Permission.CAN_PARK_ORDER,
+    Permission.CAN_APPLY_DISCOUNT,
+    Permission.CAN_CHANGE_PRICE,
+    Permission.CAN_MANAGE_MENU,
+    Permission.CAN_MANAGE_INVENTORY,
+    Permission.CAN_VIEW_INVENTORY,
+    Permission.CAN_VIEW_REPORTS,
+    Permission.CAN_VIEW_ALL_OUTLETS,
+    Permission.CAN_MANAGE_USERS,
+    Permission.CAN_MANAGE_SETTINGS,
+    Permission.CAN_MANAGE_FLOOR_PLAN,
+    Permission.CAN_MANAGE_SHIFTS,
+    Permission.CAN_VIEW_SHIFTS,
+    Permission.CAN_VIEW_KDS,
+    Permission.CAN_MARK_ORDER_READY,
+  ],
+  OutletManager: [
+    // Outlet-level management
+    Permission.CAN_PROCESS_PAYMENT,
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_CREATE_ORDER,
+    Permission.CAN_MODIFY_ORDER,
+    Permission.CAN_CANCEL_ORDER,
+    Permission.CAN_PARK_ORDER,
+    Permission.CAN_APPLY_DISCOUNT,
+    Permission.CAN_CHANGE_PRICE,
+    Permission.CAN_MANAGE_MENU,
+    Permission.CAN_MANAGE_INVENTORY,
+    Permission.CAN_VIEW_INVENTORY,
+    Permission.CAN_VIEW_REPORTS,
+    Permission.CAN_MANAGE_USERS, // Can manage staff in their outlet
+    Permission.CAN_MANAGE_SETTINGS,
+    Permission.CAN_MANAGE_FLOOR_PLAN,
+    Permission.CAN_MANAGE_SHIFTS,
+    Permission.CAN_VIEW_SHIFTS,
+    Permission.CAN_VIEW_KDS,
+    Permission.CAN_MARK_ORDER_READY,
+  ],
+  Cashier: [
+    // Can bill, limited modifications
+    Permission.CAN_PROCESS_PAYMENT,
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_CREATE_ORDER,
+    Permission.CAN_MODIFY_ORDER,
+    Permission.CAN_PARK_ORDER,
+    Permission.CAN_VIEW_INVENTORY,
+    Permission.CAN_VIEW_SHIFTS,
+    // CANNOT: Cancel orders, apply discounts, change prices
+  ],
+  Waiter: [
+    // Can take orders, cannot bill
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_CREATE_ORDER,
+    Permission.CAN_MODIFY_ORDER,
+    Permission.CAN_PARK_ORDER,
+    Permission.CAN_VIEW_INVENTORY,
+    // CANNOT: Process payments, cancel, discount, price changes
+  ],
+  KitchenStaff: [
+    // Kitchen display only
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_VIEW_KDS,
+    Permission.CAN_MARK_ORDER_READY,
+    Permission.CAN_VIEW_INVENTORY,
+    // CANNOT: Any POS operations, billing, modifications
+  ],
+  Accountant: [
+    // View-only for reports and auditing
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_VIEW_INVENTORY,
+    Permission.CAN_VIEW_REPORTS,
+    Permission.CAN_VIEW_ALL_OUTLETS,
+    Permission.CAN_VIEW_SHIFTS,
+    // CANNOT: Any modifications, only viewing
+  ],
+};
 
 export interface User {
   id: string;
@@ -64,6 +189,7 @@ export interface User {
   pin: string; // 4-digit PIN for login
   role: UserRole;
   assignedOutletIds: string[];
+  permissions?: Permission[]; // Optional: custom permissions override
 }
 
 export interface ActivityLog {

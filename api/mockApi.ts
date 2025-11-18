@@ -1,4 +1,4 @@
-import { Tenant, Outlet, User, Order, MenuItem, FloorPlanObject, Shift, Payment, InventoryItem, StockMovement, OrderItem, Variant, Tax, DeliveryDetails, UserRole } from '../types';
+import { Tenant, Outlet, User, Order, MenuItem, FloorPlanObject, Shift, Payment, InventoryItem, StockMovement, OrderItem, Variant, Tax, DeliveryDetails, UserRole, ActivityLog } from '../types';
 import { initializeDb } from './mockData';
 import { ToastType } from '../context/AppContext';
 
@@ -835,7 +835,49 @@ class Api {
         if (this.stateChangeCallback) this.stateChangeCallback();
         return this.simulateDelay(updatedTenant, 0); // Instant
     }
+
+    // Activity Logging for audit trail
+    logActivity = async(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<ActivityLog> => {
+        const activityLog: ActivityLog = {
+            id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: Date.now(),
+            ...log
+        };
+        
+        addToTable('activityLogs', activityLog);
+        return this.simulateDelay(activityLog, 0); // Instant logging
+    }
+
+    getActivityLogs = async(outletId?: string, startDate?: number, endDate?: number): Promise<ActivityLog[]> => {
+        if (!this.isOnline) return Promise.resolve([]);
+        
+        let logs = getTable<ActivityLog>('activityLogs');
+        
+        // Filter by tenant
+        if (this.tenantId) {
+            logs = logs.filter(l => l.tenantId === this.tenantId);
+        }
+        
+        // Filter by outlet if specified
+        if (outletId && outletId !== 'all') {
+            logs = logs.filter(l => l.outletId === outletId);
+        }
+        
+        // Filter by date range
+        if (startDate) {
+            logs = logs.filter(l => l.timestamp >= startDate);
+        }
+        if (endDate) {
+            logs = logs.filter(l => l.timestamp <= endDate);
+        }
+        
+        // Sort by most recent first
+        logs.sort((a, b) => b.timestamp - a.timestamp);
+        
+        return this.simulateDelay(logs, 0);
+    }
 }
 
 export const api = new Api();
 export type MockApi = Api;
+

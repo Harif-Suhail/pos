@@ -90,6 +90,8 @@ export const MOCK_USERS: User[] = [
     { id: 'u4', tenantId: 't1', name: 'Kevin Kitchen', pin: '4444', role: 'KitchenStaff', assignedOutletIds: ['o1'] },
     { id: 'u5', tenantId: 't2', name: 'Yuki Owner', pin: '5555', role: 'BrandAdmin', assignedOutletIds: ['o3'] },
     { id: 'u6', tenantId: 't2', name: 'Kenji Cashier', pin: '6666', role: 'Cashier', assignedOutletIds: ['o3'] },
+    { id: 'u7', tenantId: 't1', name: 'Walter Waiter', pin: '7777', role: 'Waiter', assignedOutletIds: ['o1'] },
+    { id: 'u8', tenantId: 't1', name: 'Amy Accountant', pin: '8888', role: 'Accountant', assignedOutletIds: ['o1', 'o2'] },
 ];
 
 export const MOCK_INVENTORY: InventoryItem[] = [

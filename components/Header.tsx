@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { UserRole } from '../types';
+import { UserRole, Permission } from '../types';
+import { hasPermission } from '../utils/helpers';
 import ShiftManagementModal from './billing/ShiftManagementModal';
 
 
@@ -23,13 +24,54 @@ const Header: React.FC = () => {
 
     if (!currentUser || !currentTenant || !currentOutlet) return null;
 
-    const navLinks: { view: 'pos' | 'kds' | 'reports' | 'inventory' | 'settings'; label: string; roles: UserRole[] }[] = [
-        { view: 'pos', label: 'POS', roles: ['Cashier', 'OutletManager', 'BrandAdmin'] },
-        { view: 'kds', label: 'KDS', roles: ['KitchenStaff', 'OutletManager', 'BrandAdmin'] },
-        { view: 'inventory', label: 'Inventory', roles: ['OutletManager', 'BrandAdmin'] },
-        { view: 'reports', label: 'Reports', roles: ['Accountant', 'OutletManager', 'BrandAdmin'] },
-        { view: 'settings', label: 'Settings', roles: ['OutletManager', 'BrandAdmin'] },
+    // Permission-based navigation with fallback to roles for compatibility
+    const navLinks: { 
+        view: 'pos' | 'kds' | 'reports' | 'inventory' | 'settings'; 
+        label: string; 
+        permission?: Permission;
+        roles?: UserRole[];
+    }[] = [
+        { 
+            view: 'pos', 
+            label: 'POS', 
+            permission: Permission.CAN_CREATE_ORDER,
+            roles: ['Cashier', 'Waiter', 'OutletManager', 'BrandAdmin'] 
+        },
+        { 
+            view: 'kds', 
+            label: 'KDS', 
+            permission: Permission.CAN_VIEW_KDS,
+            roles: ['KitchenStaff', 'OutletManager', 'BrandAdmin'] 
+        },
+        { 
+            view: 'inventory', 
+            label: 'Inventory', 
+            permission: Permission.CAN_VIEW_INVENTORY,
+            roles: ['OutletManager', 'BrandAdmin'] 
+        },
+        { 
+            view: 'reports', 
+            label: 'Reports', 
+            permission: Permission.CAN_VIEW_REPORTS,
+            roles: ['Accountant', 'OutletManager', 'BrandAdmin'] 
+        },
+        { 
+            view: 'settings', 
+            label: 'Settings', 
+            permission: Permission.CAN_MANAGE_SETTINGS,
+            roles: ['OutletManager', 'BrandAdmin'] 
+        },
     ];
+
+    // Filter navigation links based on permissions
+    const allowedLinks = navLinks.filter(link => {
+        // Check permission first
+        if (link.permission && hasPermission(currentUser, link.permission)) {
+            return true;
+        }
+        // Fallback to role-based check
+        return link.roles && link.roles.includes(currentUser.role);
+    });
 
     const SunIcon = () => (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -58,7 +100,7 @@ const Header: React.FC = () => {
 
                 {/* View Navigation */}
                 <div className="flex items-center space-x-2 bg-[var(--background-tertiary)] rounded-md p-1">
-                    {navLinks.filter(link => link.roles.includes(currentUser.role)).map(link => (
+                    {allowedLinks.map(link => (
                          <button 
                             key={link.view}
                             onClick={() => setCurrentView(link.view)} 

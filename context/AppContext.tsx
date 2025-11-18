@@ -212,6 +212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             OutletManager: 'reports',
             Accountant: 'reports',
             Cashier: 'pos',
+            Waiter: 'pos',
             KitchenStaff: 'kds',
         };
         setCurrentView(defaultViews[user.role] || 'pos');

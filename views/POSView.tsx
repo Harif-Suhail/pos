@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { OrderItem, MenuItem, Order, DeliveryDetails } from '../types';
+import { OrderItem, MenuItem, Order, DeliveryDetails, Permission } from '../types';
 import { getUpsellSuggestion } from '../services/geminiService';
 import { useAppContext } from '../hooks/useAppContext';
+import { hasPermission } from '../utils/helpers';
 
 // Components
 import CategoryTabs from '../components/CategoryTabs';
@@ -136,28 +137,77 @@ export default function POSView() {
     }, [selectedOrderId, addToast]);
 
     const handleCancelOrder = useCallback(async () => {
-        if (!selectedOrderId || !currentUser || !['OutletManager', 'BrandAdmin'].includes(currentUser.role)) return;
+        if (!selectedOrderId) return;
+        
+        // Permission check: Only users with CAN_CANCEL_ORDER permission can cancel
+        if (!hasPermission(currentUser, Permission.CAN_CANCEL_ORDER)) {
+            addToast('You do not have permission to cancel orders', 'error');
+            return;
+        }
+        
         if (window.confirm("Are you sure you want to cancel this order? This cannot be undone.")) {
             await api.cancelOrder(selectedOrderId, "Cancelled by manager");
             addToast(`Order #${selectedOrder?.orderNumber} cancelled.`, 'success');
+            
+            // Log activity
+            if (currentUser && currentOutlet) {
+                api.logActivity({
+                    tenantId: currentUser.tenantId,
+                    outletId: currentOutlet.id,
+                    userId: currentUser.id,
+                    action: 'ORDER_CANCELLED',
+                    details: { orderId: selectedOrderId, orderNumber: selectedOrder?.orderNumber }
+                });
+            }
+            
             setSelectedOrderId(null);
         }
-    }, [selectedOrderId, currentUser, api, addToast, selectedOrder]);
+    }, [selectedOrderId, currentUser, currentOutlet, api, addToast, selectedOrder]);
 
 
     // Payment Flow
     const handleStartPayment = useCallback(() => {
+        // Permission check: Only users with CAN_PROCESS_PAYMENT can start payment
+        if (!hasPermission(currentUser, Permission.CAN_PROCESS_PAYMENT)) {
+            addToast('You do not have permission to process payments', 'error');
+            return;
+        }
+        
         if (selectedOrder?.items.length) setPaymentModalOpen(true);
-    }, [selectedOrder]);
+    }, [selectedOrder, currentUser, addToast]);
 
     const handleCompletePayment = useCallback(async (payments: any[]) => {
         if (!selectedOrder) return;
+        
+        // Double-check permission
+        if (!hasPermission(currentUser, Permission.CAN_PROCESS_PAYMENT)) {
+            addToast('You do not have permission to process payments', 'error');
+            return;
+        }
+        
         const paidOrder = await api.completePayment(selectedOrder.id, payments);
+        
+        // Log activity
+        if (currentUser && currentOutlet) {
+            api.logActivity({
+                tenantId: currentUser.tenantId,
+                outletId: currentOutlet.id,
+                userId: currentUser.id,
+                action: 'PAYMENT_COMPLETED',
+                details: { 
+                    orderId: selectedOrder.id, 
+                    orderNumber: selectedOrder.orderNumber,
+                    total: selectedOrder.total,
+                    payments 
+                }
+            });
+        }
+        
         setLastCompletedOrder(paidOrder);
         setSelectedOrderId(null);
         setPaymentModalOpen(false);
         setReceiptModalOpen(true);
-    }, [selectedOrder, api]);
+    }, [selectedOrder, currentUser, currentOutlet, api, addToast]);
 
     const handleNewOrder = useCallback(() => {
         setReceiptModalOpen(false);
@@ -168,6 +218,13 @@ export default function POSView() {
     // Park/Hold and Retrieve Orders
     const handleParkOrder = useCallback(async () => {
         if (!selectedOrderId) return;
+        
+        // Permission check
+        if (!hasPermission(currentUser, Permission.CAN_PARK_ORDER)) {
+            addToast('You do not have permission to park orders', 'error');
+            return;
+        }
+        
         if (!selectedOrder?.items.length) {
             addToast('Cannot park an empty order', 'warning');
             return;
@@ -195,14 +252,38 @@ export default function POSView() {
     // Discount Management
     const handleApplyDiscount = useCallback(async (amount: number, reason: string) => {
         if (!selectedOrderId) return;
+        
+        // Permission check: Only users with CAN_APPLY_DISCOUNT can apply discounts
+        if (!hasPermission(currentUser, Permission.CAN_APPLY_DISCOUNT)) {
+            addToast('You do not have permission to apply discounts', 'error');
+            setDiscountModalOpen(false);
+            return;
+        }
+        
         try {
             await api.applyDiscount(selectedOrderId, amount, reason);
             addToast(amount > 0 ? 'Discount applied successfully' : 'Discount removed', 'success');
+            
+            // Log activity
+            if (currentUser && currentOutlet) {
+                api.logActivity({
+                    tenantId: currentUser.tenantId,
+                    outletId: currentOutlet.id,
+                    userId: currentUser.id,
+                    action: 'DISCOUNT_APPLIED',
+                    details: { 
+                        orderId: selectedOrderId, 
+                        orderNumber: selectedOrder?.orderNumber,
+                        amount, 
+                        reason 
+                    }
+                });
+            }
         } catch (error: any) {
             addToast(`Error: ${error.message}`, 'error');
         }
         setDiscountModalOpen(false);
-    }, [selectedOrderId, api, addToast]);
+    }, [selectedOrderId, currentUser, currentOutlet, selectedOrder, api, addToast]);
 
     // Gemini Suggestion
     const handleFetchSuggestion = useCallback(async () => {
@@ -322,7 +403,13 @@ export default function POSView() {
                     onSendToKitchen={handleSendToKitchen}
                     onCancelOrder={handleCancelOrder}
                     onParkOrder={handleParkOrder}
-                    onApplyDiscount={() => setDiscountModalOpen(true)}
+                    onApplyDiscount={() => {
+                        if (!hasPermission(currentUser, Permission.CAN_APPLY_DISCOUNT)) {
+                            addToast('You do not have permission to apply discounts', 'error');
+                            return;
+                        }
+                        setDiscountModalOpen(true);
+                    }}
                     onEditNotes={(item) => { setItemForNotes(item); setNotesModalOpen(true); }}
                     onTransferOrder={() => setDialog({ type: 'transfer'})}
                     onMergeOrder={() => setDialog({ type: 'merge'})}
