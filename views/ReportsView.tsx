@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { Outlet, Order } from '../types';
+import { Outlet, Order, Shift } from '../types';
 import Spinner from '../components/common/Spinner';
 import AnalyticsDashboard from '../components/reports/AnalyticsDashboard';
 import SalesReports from '../components/reports/SalesReports';
 import PaymentReports from '../components/reports/PaymentReports';
 import StaffPerformanceReports from '../components/reports/StaffPerformanceReports';
 import InventoryReports from '../components/reports/InventoryReports';
+import ShiftReport from '../components/reports/ShiftReport';
 
-type ReportTab = 'dashboard' | 'sales' | 'payments' | 'staff' | 'inventory';
+type ReportTab = 'dashboard' | 'sales' | 'payments' | 'staff' | 'inventory' | 'shifts';
 
 export default function ReportsView() {
     const { currentUser, currentOutlet, allOutlets, api } = useAppContext();
     const [activeTab, setActiveTab] = useState<ReportTab>('dashboard');
     const [isLoading, setIsLoading] = useState(true);
     const [reportData, setReportData] = useState<Order[]>([]);
+    const [shifts, setShifts] = useState<Shift[]>([]);
+    const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
     
     const [selectedOutlet, setSelectedOutlet] = useState<Outlet | 'all' | null>(
         currentUser?.role === 'BrandAdmin' ? 'all' : currentOutlet
@@ -25,8 +28,16 @@ export default function ReportsView() {
             if (!selectedOutlet) return;
             setIsLoading(true);
             const outletId = selectedOutlet === 'all' ? 'all' : selectedOutlet.id;
-            const data = await api.getCompletedOrders(outletId);
-            setReportData(data);
+            const [orders, shiftData] = await Promise.all([
+                api.getCompletedOrders(outletId),
+                api.getShifts(outletId)
+            ]);
+            setReportData(orders);
+            setShifts(shiftData);
+            // Set the most recent shift as default
+            if (shiftData.length > 0) {
+                setSelectedShift(shiftData[shiftData.length - 1]);
+            }
             setIsLoading(false);
         };
         fetchReportData();
@@ -59,6 +70,38 @@ export default function ReportsView() {
                 return <StaffPerformanceReports reportData={reportData} />;
             case 'inventory':
                 return <InventoryReports selectedOutletId={outletId} />;
+            case 'shifts':
+                return (
+                    <div className="space-y-6">
+                        {shifts.length > 0 ? (
+                            <>
+                                <div className="bg-[var(--background-secondary)] p-4 rounded-lg">
+                                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                                        Select Shift:
+                                    </label>
+                                    <select
+                                        value={selectedShift?.id || ''}
+                                        onChange={(e) => {
+                                            const shift = shifts.find(s => s.id === e.target.value);
+                                            setSelectedShift(shift || null);
+                                        }}
+                                        className="bg-[var(--background-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm rounded-lg focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] block w-full p-2.5"
+                                    >
+                                        {shifts.map(shift => (
+                                            <option key={shift.id} value={shift.id}>
+                                                {new Date(shift.startTime).toLocaleDateString()} - {new Date(shift.startTime).toLocaleTimeString()}
+                                                {shift.endTime ? ` to ${new Date(shift.endTime).toLocaleTimeString()}` : ' (In Progress)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {selectedShift && <ShiftReport shift={selectedShift} orders={reportData} />}
+                            </>
+                        ) : (
+                            <p className="text-[var(--text-secondary)] text-center py-8">No shift data available.</p>
+                        )}
+                    </div>
+                );
             default:
                 return null;
         }
@@ -70,6 +113,7 @@ export default function ReportsView() {
         { id: 'payments', label: 'Payments' },
         { id: 'staff', label: 'Staff Performance' },
         { id: 'inventory', label: 'Inventory' },
+        { id: 'shifts', label: 'Shift Reports' },
     ];
     
     return (

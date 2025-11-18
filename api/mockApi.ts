@@ -378,6 +378,23 @@ class Api {
         
         await this._deductInventoryForOrder(order);
 
+        // Update shift with cash payments
+        const currentShift = await this.getCurrentShift();
+        const cashPayment = payments.find(p => p.method === 'Cash');
+        
+        if (cashPayment) {
+            if (!currentShift) {
+                // Warning: No active shift but accepting payment anyway
+                if (this.toastCallback) {
+                    this.toastCallback('Warning: No active shift. Cash payment accepted but not tracked in shift.', 'warning');
+                }
+            } else {
+                currentShift.cashPayments += cashPayment.amount;
+                currentShift.expectedCash += cashPayment.amount;
+                updateInTable('shifts', currentShift);
+            }
+        }
+
         if (this.stateChangeCallback) this.stateChangeCallback();
         return this.simulateDelay(order);
     };
@@ -591,6 +608,14 @@ class Api {
         const shifts = getTable<Shift>('shifts');
         const openShift = shifts.find(s => s.outletId === this.outletId && s.userId === this.userId && !s.endTime);
         return this.simulateDelay(openShift || null);
+    };
+
+    getShifts = async (outletId: string | 'all' = this.outletId!): Promise<Shift[]> => {
+        const shifts = getTable<Shift>('shifts');
+        if (outletId === 'all' && (this.userRole === 'BrandAdmin')) {
+            return this.simulateDelay(shifts.filter(s => s.tenantId === this.tenantId));
+        }
+        return this.simulateDelay(shifts.filter(s => s.outletId === outletId));
     };
 
     startShift = async (openingCash: number): Promise<Shift | undefined> => {
