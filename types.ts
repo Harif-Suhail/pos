@@ -263,6 +263,7 @@ export interface OrderItem {
   uniqueId: string; // To differentiate same items with different mods
   itemId: string;
   name: string;
+  category?: string; // Menu item category for reporting
   quantity: number;
   price: number; // Price at time of order
   variant?: Variant;

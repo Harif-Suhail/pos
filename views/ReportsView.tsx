@@ -8,16 +8,18 @@ import PaymentReports from '../components/reports/PaymentReports';
 import StaffPerformanceReports from '../components/reports/StaffPerformanceReports';
 import InventoryReports from '../components/reports/InventoryReports';
 import ShiftReport from '../components/reports/ShiftReport';
+import DailySummaryReport from '../components/reports/DailySummaryReport';
 
-type ReportTab = 'dashboard' | 'sales' | 'payments' | 'staff' | 'inventory' | 'shifts';
+type ReportTab = 'daily-summary' | 'dashboard' | 'sales' | 'payments' | 'staff' | 'inventory' | 'shifts';
 
 export default function ReportsView() {
     const { currentUser, currentOutlet, allOutlets, api } = useAppContext();
-    const [activeTab, setActiveTab] = useState<ReportTab>('dashboard');
+    const [activeTab, setActiveTab] = useState<ReportTab>('daily-summary');
     const [isLoading, setIsLoading] = useState(true);
     const [reportData, setReportData] = useState<Order[]>([]);
     const [shifts, setShifts] = useState<Shift[]>([]);
     const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     
     const [selectedOutlet, setSelectedOutlet] = useState<Outlet | 'all' | null>(
         currentUser?.role === 'BrandAdmin' ? 'all' : currentOutlet
@@ -60,6 +62,35 @@ export default function ReportsView() {
         const outletId = selectedOutlet === 'all' ? 'all' : selectedOutlet!.id;
 
         switch (activeTab) {
+            case 'daily-summary':
+                // Filter data for selected date
+                const startOfDay = new Date(selectedDate);
+                startOfDay.setHours(0, 0, 0, 0);
+                const endOfDay = new Date(selectedDate);
+                endOfDay.setHours(23, 59, 59, 999);
+                
+                const dailyData = reportData.filter(order => {
+                    const orderDate = new Date(order.createdAt);
+                    return orderDate >= startOfDay && orderDate <= endOfDay;
+                });
+                
+                return (
+                    <div className="space-y-4">
+                        <div className="bg-[var(--background-secondary)] p-4 rounded-lg">
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                                Select Date:
+                            </label>
+                            <input
+                                type="date"
+                                value={selectedDate.toISOString().split('T')[0]}
+                                onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                                max={new Date().toISOString().split('T')[0]}
+                                className="bg-[var(--background-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm rounded-lg focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] block w-full md:w-auto p-2.5"
+                            />
+                        </div>
+                        <DailySummaryReport reportData={dailyData} selectedDate={selectedDate} />
+                    </div>
+                );
             case 'dashboard':
                 return <AnalyticsDashboard orders={reportData} />;
             case 'sales':
@@ -107,7 +138,8 @@ export default function ReportsView() {
         }
     };
 
-    const tabs: { id: ReportTab; label: string; }[] = [
+    const tabs: { id: ReportTab; label: string; icon?: string; }[] = [
+        { id: 'daily-summary', label: '📋 Daily Summary', icon: '📋' },
         { id: 'dashboard', label: 'Analytics Dashboard' },
         { id: 'sales', label: 'Sales Details' },
         { id: 'payments', label: 'Payments' },

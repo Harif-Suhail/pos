@@ -284,6 +284,7 @@ class Api {
             uniqueId: `item_${Date.now()}`,
             itemId: menuItem.id,
             name: menuItem.name,
+            category: menuItem.category, // Include category for reporting
             quantity: 1,
             price: variant ? variant.price : menuItem.basePrice,
             variant: variant,
