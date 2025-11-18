@@ -19,6 +19,7 @@ export interface AppContextType {
     currentUser: User | null;
     activeOrders: Order[];
     completedOrders: Order[];
+    parkedOrders: Order[]; // Held/parked orders
     menuItems: MenuItem[];
     menuCategories: string[];
     inventory: InventoryItem[];
@@ -63,6 +64,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Data State
     const [activeOrders, setActiveOrders] = useState<Order[]>([]);
     const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+    const [parkedOrders, setParkedOrders] = useState<Order[]>([]); // Held/parked orders
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
@@ -100,10 +102,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // For staff, sync everything
         if (currentUser) {
             // Refetch tenant and outlet to get latest settings
-            const [refreshedTenant, refreshedOutlet, orders, menu, plan, shift, inv, movements] = await Promise.all([
+            const [refreshedTenant, refreshedOutlet, orders, parked, menu, plan, shift, inv, movements] = await Promise.all([
                 mockApi.getTenantById(currentTenant.id),
                 mockApi.getOutletById(currentOutlet.id),
                 mockApi.getActiveOrders(),
+                mockApi.getParkedOrders(),
                 mockApi.getMenu(),
                 mockApi.getFloorPlan(),
                 mockApi.getCurrentShift(),
@@ -115,6 +118,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (refreshedOutlet) setCurrentOutlet(refreshedOutlet);
 
             setActiveOrders(orders);
+            setParkedOrders(parked);
             setMenuItems(menu);
             setFloorPlan(plan);
             setCurrentShift(shift);
@@ -238,6 +242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         activeOrders,
         completedOrders,
+        parkedOrders,
         menuItems,
         menuCategories,
         inventory,

@@ -15,6 +15,7 @@ import FloorPlanDisplay from '../components/FloorPlanDisplay';
 import NotesModal from '../components/NotesModal';
 import VariantSelectionModal from '../components/menu/VariantSelectionModal';
 import InputDialog from '../components/common/InputDialog';
+import ParkedOrdersPanel from '../components/ParkedOrdersPanel';
 
 
 export default function POSView() {
@@ -22,7 +23,8 @@ export default function POSView() {
         currentUser, 
         currentTenant,
         currentOutlet,
-        activeOrders, 
+        activeOrders,
+        parkedOrders,
         menuItems,
         menuCategories,
         floorPlan,
@@ -45,6 +47,7 @@ export default function POSView() {
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
     const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
     const [isNotesModalOpen, setNotesModalOpen] = useState(false);
+    const [isParkedOrdersPanelOpen, setParkedOrdersPanelOpen] = useState(false);
     const [suggestion, setSuggestion] = useState('');
     const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
     const [suggestionError, setSuggestionError] = useState('');
@@ -160,6 +163,33 @@ export default function POSView() {
         setViewMode('floorplan');
     };
 
+    // Park/Hold and Retrieve Orders
+    const handleParkOrder = async () => {
+        if (!selectedOrderId) return;
+        if (!selectedOrder?.items.length) {
+            addToast('Cannot park an empty order', 'warning');
+            return;
+        }
+        try {
+            await api.parkOrder(selectedOrderId);
+            setSelectedOrderId(null);
+            setViewMode('floorplan');
+        } catch (error: any) {
+            addToast(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    const handleRetrieveOrder = async (orderId: string) => {
+        try {
+            await api.retrieveParkedOrder(orderId);
+            setSelectedOrderId(orderId);
+            setViewMode('menu');
+            setParkedOrdersPanelOpen(false);
+        } catch (error: any) {
+            addToast(`Error: ${error.message}`, 'error');
+        }
+    };
+
     // Gemini Suggestion
     const handleFetchSuggestion = async () => {
         if (!selectedOrder?.items.length) {
@@ -239,11 +269,25 @@ export default function POSView() {
             />
             
             <div className="flex-grow flex flex-col overflow-hidden">
-                 <div className="flex-shrink-0 bg-[var(--background-secondary)] p-2 rounded-lg mb-4">
+                 <div className="flex-shrink-0 bg-[var(--background-secondary)] p-2 rounded-lg mb-4 flex justify-between items-center">
                     <div className="bg-[var(--background-tertiary)] rounded-md inline-flex">
                         <button onClick={() => setViewMode('floorplan')} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${viewMode === 'floorplan' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-tertiary)] hover:bg-[var(--background-interactive)]'}`} aria-pressed={viewMode === 'floorplan'}>Floor Plan</button>
                         <button onClick={() => setViewMode('menu')} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${viewMode === 'menu' ? 'bg-[var(--accent-primary)] text-[var(--accent-primary-text)]' : 'text-[var(--text-tertiary)] hover:bg-[var(--background-interactive)]'}`} aria-pressed={viewMode === 'menu'}>Menu</button>
                     </div>
+                    <button
+                        onClick={() => setParkedOrdersPanelOpen(true)}
+                        className="relative bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors flex items-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        Parked Orders
+                        {parkedOrders.length > 0 && (
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
+                                {parkedOrders.length}
+                            </span>
+                        )}
+                    </button>
                 </div>
                 {viewMode === 'menu' && (
                     <>
@@ -264,6 +308,7 @@ export default function POSView() {
                     onStartPayment={handleStartPayment}
                     onSendToKitchen={handleSendToKitchen}
                     onCancelOrder={handleCancelOrder}
+                    onParkOrder={handleParkOrder}
                     onEditNotes={(item) => { setItemForNotes(item); setNotesModalOpen(true); }}
                     onTransferOrder={() => setDialog({ type: 'transfer'})}
                     onMergeOrder={() => setDialog({ type: 'merge'})}
@@ -272,6 +317,12 @@ export default function POSView() {
             </aside>
 
             {/* Modals & Dialogs */}
+            <ParkedOrdersPanel
+                parkedOrders={parkedOrders}
+                onRetrieveOrder={handleRetrieveOrder}
+                isOpen={isParkedOrdersPanelOpen}
+                onClose={() => setParkedOrdersPanelOpen(false)}
+            />
             <GeminiSuggestionModal isOpen={isSuggestionModalOpen} onClose={() => setSuggestionModalOpen(false)} suggestion={suggestion} isLoading={isLoadingSuggestion} error={suggestionError} />
             <PaymentModal isOpen={isPaymentModalOpen} onClose={() => setPaymentModalOpen(false)} order={selectedOrder} onConfirmPayment={handleCompletePayment} />
             <ReceiptModal isOpen={isReceiptModalOpen} onClose={handleNewOrder} order={lastCompletedOrder} tenant={currentTenant} outlet={currentOutlet} />

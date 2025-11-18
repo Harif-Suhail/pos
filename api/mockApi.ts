@@ -369,6 +369,55 @@ class Api {
         return this.simulateDelay(order);
     };
 
+    // Park/Hold order - moves order to parked orders list
+    parkOrder = async (orderId: string): Promise<Order> => {
+        let orders = getTable<Order>('orders');
+        let order = orders.find(o => o.id === orderId);
+        if (!order) throw new Error("Order not found");
+        if (order.status !== 'OPEN') throw new Error("Only open orders can be parked");
+        
+        // Move to parked orders table
+        const parkedOrders = getTable<Order>('parkedOrders');
+        order.parkedAt = new Date().toISOString();
+        parkedOrders.push(order);
+        setTable('parkedOrders', parkedOrders);
+        
+        // Remove from active orders
+        const remainingOrders = orders.filter(o => o.id !== orderId);
+        setTable('orders', remainingOrders);
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Order ${order.orderNumber} parked`, 'info');
+        return this.simulateDelay(order);
+    };
+
+    // Retrieve parked order - moves order back to active orders
+    retrieveParkedOrder = async (orderId: string): Promise<Order> => {
+        let parkedOrders = getTable<Order>('parkedOrders');
+        let order = parkedOrders.find(o => o.id === orderId);
+        if (!order) throw new Error("Parked order not found");
+        
+        // Remove from parked orders
+        const remainingParked = parkedOrders.filter(o => o.id !== orderId);
+        setTable('parkedOrders', remainingParked);
+        
+        // Add back to active orders
+        delete order.parkedAt;
+        const orders = getTable<Order>('orders');
+        orders.push(order);
+        setTable('orders', orders);
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Order ${order.orderNumber} retrieved`, 'success');
+        return this.simulateDelay(order);
+    };
+
+    // Get all parked orders
+    getParkedOrders = async (): Promise<Order[]> => {
+        const parkedOrders = getTable<Order>('parkedOrders');
+        return this.simulateDelay(parkedOrders);
+    };
+
     approveOrder = async (orderId: string): Promise<Order> => {
         let order = getTable<Order>('orders').find(o => o.id === orderId);
         if (!order) throw new Error("Order not found");

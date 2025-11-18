@@ -11,6 +11,7 @@ interface OrderSummaryProps {
     onStartPayment: () => void;
     onSendToKitchen: () => void;
     onCancelOrder: () => void;
+    onParkOrder: () => void;
     onEditNotes: (item: OrderItem) => void;
     onTransferOrder: () => void;
     onMergeOrder: () => void;
@@ -19,7 +20,7 @@ interface OrderSummaryProps {
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({ 
     order, currentUser, outlet, 
-    onUpdateQuantity, onFetchSuggestion, onStartPayment, onSendToKitchen, onCancelOrder, onEditNotes,
+    onUpdateQuantity, onFetchSuggestion, onStartPayment, onSendToKitchen, onCancelOrder, onParkOrder, onEditNotes,
     onTransferOrder, onMergeOrder, onSplitOrder 
 }) => {
     
@@ -140,6 +141,16 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                         className="w-full bg-[var(--warning)] hover:bg-[var(--warning-hover)] disabled:bg-[var(--disabled)] disabled:cursor-not-allowed text-[var(--accent-primary-text)] font-bold py-3 rounded-lg transition-colors duration-200"
                     >
                         Send to Kitchen
+                    </button>
+                    <button
+                        onClick={onParkOrder}
+                        disabled={items.length === 0}
+                        className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-[var(--disabled)] disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        Park Order
                     </button>
                 </div>
                  <button

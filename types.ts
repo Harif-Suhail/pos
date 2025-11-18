@@ -185,6 +185,7 @@ export interface Order {
   createdBy: string; // userId
   closedAt?: number;
   closedBy?: string; // userId
+  parkedAt?: string; // ISO timestamp when order was parked/held
   needsSync?: boolean; // True if created/modified offline
 }
 
