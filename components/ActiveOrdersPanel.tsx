@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Order } from '../types';
 
 interface ActiveOrdersPanelProps {
@@ -10,7 +10,7 @@ interface ActiveOrdersPanelProps {
     onApproveOrder: (orderId: string) => void;
 }
 
-const ActiveOrdersPanel: React.FC<ActiveOrdersPanelProps> = ({ orders, selectedOrderId, onSelectOrder, onNewTakeoutOrder, onNewDeliveryOrder, onApproveOrder }) => {
+const ActiveOrdersPanel: React.FC<ActiveOrdersPanelProps> = memo(({ orders, selectedOrderId, onSelectOrder, onNewTakeoutOrder, onNewDeliveryOrder, onApproveOrder }) => {
     
     const getOrderName = (order: Order) => {
         if (order.type === 'QR' && order.table) return `QR Table ${order.table}`;
@@ -83,6 +83,8 @@ const ActiveOrdersPanel: React.FC<ActiveOrdersPanelProps> = ({ orders, selectedO
             </div>
         </aside>
     );
-}
+});
+
+ActiveOrdersPanel.displayName = 'ActiveOrdersPanel';
 
 export default ActiveOrdersPanel;

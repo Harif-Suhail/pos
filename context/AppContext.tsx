@@ -78,22 +78,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) || 'dark');
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-    const addToast = (message: string, type: ToastType = 'info') => {
+    const addToast = useCallback((message: string, type: ToastType = 'info') => {
         const id = Date.now();
         setToasts(prev => [...prev, { id, message, type }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 5000);
-    };
+    }, []);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-    const toggleTheme = () => {
+    const toggleTheme = useCallback(() => {
         setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
-    };
+    }, []);
 
     const syncData = useCallback(async () => {
         if (!currentOutlet || !currentTenant) return;
@@ -132,12 +132,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setMenuItems(menu);
             setFloorPlan(plan);
         }
-    }, [currentOutlet, currentTenant, currentUser]);
+    }, [currentOutlet?.id, currentTenant?.id, currentUser?.id]); // Only depend on IDs to avoid infinite loops
 
     const api = useMemo(() => {
        mockApi.setIsOnline(isOnline, addToast);
        return mockApi;
-    }, [isOnline, addToast]);
+    }, [isOnline]);
 
     useEffect(() => {
         api.onStateChange(syncData);
@@ -163,19 +163,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
             setAllOutlets([]);
         }
-    }, [currentTenant, api, currentOutlet?.id]);
+    }, [currentTenant?.id, api, currentOutlet?.id]); // Use IDs to avoid unnecessary re-runs
 
     
+    // Only sync when outlet/online status changes, not on every render
     useEffect(() => {
         if (currentOutlet && isOnline) {
             syncData();
         }
-    }, [currentOutlet, isOnline, syncData]);
+    }, [currentOutlet?.id, isOnline, syncData]); // Use ID to avoid infinite loops
 
-    const getOutletsForTenant = (tenantId: string) => api.getOutlets(tenantId);
-    const getUsersForOutlet = (outletId: string) => api.getUsers(outletId);
+    const getOutletsForTenant = useCallback((tenantId: string) => api.getOutlets(tenantId), [api]);
+    const getUsersForOutlet = useCallback((outletId: string) => api.getUsers(outletId), [api]);
     
-    const initializeQRSession = async (outletId: string) => {
+    const initializeQRSession = useCallback(async (outletId: string) => {
         console.log("Initializing QR Session for outlet:", outletId);
         // Reset any existing session
         logout();
@@ -191,9 +192,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentTenant(tenant);
         setCurrentOutlet(outlet);
         // syncData will be called by the useEffect watching currentOutlet
-    };
+    }, [api]);
 
-    const login = async (userId: string, pin: string) => {
+    const login = useCallback(async (userId: string, pin: string) => {
         const { user, tenant, outlet } = await api.login(userId, pin);
         setCurrentUser(user);
         setCurrentTenant(tenant);
@@ -214,9 +215,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             KitchenStaff: 'kds',
         };
         setCurrentView(defaultViews[user.role] || 'pos');
-    };
+    }, [api, isOnline]);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         api.logout();
         setCurrentUser(null);
         setCurrentTenant(null);
@@ -227,7 +228,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFloorPlan([]);
         setInventory([]);
         setStockMovements([]);
-    };
+    }, [api]);
 
     const menuCategories = useMemo(() => {
         const categories = new Set(menuItems.map(item => item.category));

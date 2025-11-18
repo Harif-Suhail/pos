@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 
 interface CategoryTabsProps {
@@ -6,7 +6,7 @@ interface CategoryTabsProps {
     onSelectCategory: (category: string) => void;
 }
 
-const CategoryTabs: React.FC<CategoryTabsProps> = ({ selectedCategory, onSelectCategory }) => {
+const CategoryTabs: React.FC<CategoryTabsProps> = memo(({ selectedCategory, onSelectCategory }) => {
     const { menuCategories } = useAppContext();
     
     return (
@@ -27,6 +27,8 @@ const CategoryTabs: React.FC<CategoryTabsProps> = ({ selectedCategory, onSelectC
             ))}
         </nav>
     );
-};
+});
+
+CategoryTabs.displayName = 'CategoryTabs';
 
 export default CategoryTabs;

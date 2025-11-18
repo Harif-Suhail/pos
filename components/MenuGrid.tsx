@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { MenuItem } from '../types';
 
 interface MenuGridProps {
@@ -6,7 +6,7 @@ interface MenuGridProps {
     onSelectItem: (item: MenuItem) => void;
 }
 
-const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) => void }> = ({ item, onSelectItem }) => {
+const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) => void }> = memo(({ item, onSelectItem }) => {
     const isOutOfStock = item.stock !== undefined && item.stock <= 0;
     const isUnavailable = item.available === false;
     const isDisabled = isOutOfStock || isUnavailable;
@@ -35,9 +35,11 @@ const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) =>
             </div>
         </button>
     );
-};
+});
 
-const MenuGrid: React.FC<MenuGridProps> = ({ items, onSelectItem }) => {
+MenuItemCard.displayName = 'MenuItemCard';
+
+const MenuGrid: React.FC<MenuGridProps> = memo(({ items, onSelectItem }) => {
     return (
         <div className="flex-grow bg-[var(--background-primary)] mt-4 p-1 overflow-y-auto">
              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -47,6 +49,8 @@ const MenuGrid: React.FC<MenuGridProps> = ({ items, onSelectItem }) => {
             </div>
         </div>
     );
-};
+});
+
+MenuGrid.displayName = 'MenuGrid';
 
 export default MenuGrid;

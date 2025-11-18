@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Order, OrderItem, User, Outlet } from '../types';
 import { formatCurrency } from '../utils/helpers';
 
@@ -19,7 +19,7 @@ interface OrderSummaryProps {
     onSplitOrder: () => void;
 }
 
-const OrderSummary: React.FC<OrderSummaryProps> = ({ 
+const OrderSummary: React.FC<OrderSummaryProps> = memo(({ 
     order, currentUser, outlet, 
     onUpdateQuantity, onFetchSuggestion, onStartPayment, onSendToKitchen, onCancelOrder, onParkOrder, onApplyDiscount, onEditNotes,
     onTransferOrder, onMergeOrder, onSplitOrder 
@@ -181,6 +181,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </div>
         </div>
     );
-};
+});
+
+OrderSummary.displayName = 'OrderSummary';
 
 export default OrderSummary;

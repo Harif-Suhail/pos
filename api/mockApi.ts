@@ -5,8 +5,29 @@ import { ToastType } from '../context/AppContext';
 // Initialize the DB on first load
 initializeDb();
 
+// Batching and debouncing for localStorage writes
+let batchUpdateTimer: NodeJS.Timeout | null = null;
+const pendingWrites: Map<string, any[]> = new Map();
+
+const scheduleBatchWrite = () => {
+    if (batchUpdateTimer) return;
+    
+    batchUpdateTimer = setTimeout(() => {
+        pendingWrites.forEach((data, tableName) => {
+            localStorage.setItem(`db_${tableName}`, JSON.stringify(data));
+        });
+        pendingWrites.clear();
+        batchUpdateTimer = null;
+    }, 100); // Batch writes every 100ms
+};
+
 // --- Helper Functions to simulate a DB ---
 const getTable = <T>(tableName: string): T[] => {
+    // Check pending writes first
+    if (pendingWrites.has(tableName)) {
+        return pendingWrites.get(tableName) as T[];
+    }
+    
     try {
         return JSON.parse(localStorage.getItem(`db_${tableName}`) || '[]');
     } catch {
@@ -15,7 +36,8 @@ const getTable = <T>(tableName: string): T[] => {
 };
 
 const setTable = <T>(tableName: string, data: T[]): void => {
-    localStorage.setItem(`db_${tableName}`, JSON.stringify(data));
+    pendingWrites.set(tableName, data);
+    scheduleBatchWrite();
 };
 
 const addToTable = <T extends { id: string }>(tableName: string, record: T): T => {
@@ -59,8 +81,10 @@ class Api {
         this.loadActionQueue();
     }
 
-    private async simulateDelay<T>(data: T): Promise<T> {
-        return new Promise(resolve => setTimeout(() => resolve(data), 300 + Math.random() * 400));
+    // Optimized delay: 0ms for instant operations, 50ms for operations that should feel async
+    private async simulateDelay<T>(data: T, delayMs: number = 0): Promise<T> {
+        if (delayMs === 0) return Promise.resolve(data);
+        return new Promise(resolve => setTimeout(() => resolve(data), delayMs));
     }
     
     private queueAction(actionName: string, ...args: any[]) {
@@ -143,14 +167,14 @@ class Api {
 
     // --- Public API Methods ---
 
-    // Auth & Context
-    getTenants = () => this.simulateDelay(getTable<Tenant>('tenants'));
-    getOutlets = (tenantId: string) => this.simulateDelay(getTable<Outlet>('outlets').filter(o => o.tenantId === tenantId));
-    getUsers = (outletId: string) => this.simulateDelay(getTable<User>('users').filter(u => u.assignedOutletIds.includes(outletId)));
+    // Auth & Context (can keep minimal delay for auth)
+    getTenants = () => this.simulateDelay(getTable<Tenant>('tenants'), 0);
+    getOutlets = (tenantId: string) => this.simulateDelay(getTable<Outlet>('outlets').filter(o => o.tenantId === tenantId), 0);
+    getUsers = (outletId: string) => this.simulateDelay(getTable<User>('users').filter(u => u.assignedOutletIds.includes(outletId)), 0);
 
     // Public methods for QR session setup
-    getOutletById = (outletId: string) => this.simulateDelay(getTable<Outlet>('outlets').find(o => o.id === outletId));
-    getTenantById = (tenantId: string) => this.simulateDelay(getTable<Tenant>('tenants').find(t => t.id === tenantId));
+    getOutletById = (outletId: string) => this.simulateDelay(getTable<Outlet>('outlets').find(o => o.id === outletId), 0);
+    getTenantById = (tenantId: string) => this.simulateDelay(getTable<Tenant>('tenants').find(t => t.id === tenantId), 0);
 
     setPublicContext(tenantId: string, outletId: string) {
         this.tenantId = tenantId;
@@ -160,7 +184,7 @@ class Api {
     }
 
     async login(userId: string, pin: string) {
-        await this.simulateDelay(null); // Add delay to login
+        await this.simulateDelay(null, 100); // Small delay for auth to feel secure
         const users = getTable<User>('users');
         const user = users.find(u => u.id === userId);
         if (!user || user.pin !== pin) throw new Error("Invalid user or PIN");
@@ -188,28 +212,28 @@ class Api {
         this.outletId = null;
     }
 
-    // Data Fetching
-    getActiveOrders = () => this.simulateDelay(getTable<Order>('orders').filter(o => o.outletId === this.outletId && o.status !== 'PAID' && o.status !== 'CANCELLED'));
+    // Data Fetching (read operations can be instant)
+    getActiveOrders = () => this.simulateDelay(getTable<Order>('orders').filter(o => o.outletId === this.outletId && o.status !== 'PAID' && o.status !== 'CANCELLED'), 0);
     getCompletedOrders = (outletId: string | 'all' = this.outletId!) => {
         const orders = getTable<Order>('orders').filter(o => o.status === 'PAID' || o.status === 'CANCELLED');
         if (outletId === 'all' && (this.userRole === 'BrandAdmin')) {
-            return this.simulateDelay(orders.filter(o => o.tenantId === this.tenantId));
+            return this.simulateDelay(orders.filter(o => o.tenantId === this.tenantId), 0);
         }
-        return this.simulateDelay(orders.filter(o => o.outletId === outletId));
+        return this.simulateDelay(orders.filter(o => o.outletId === outletId), 0);
     };
-    getMenu = () => this.simulateDelay(getTable<MenuItem>('menuItems').filter(m => m.tenantId === this.tenantId));
+    getMenu = () => this.simulateDelay(getTable<MenuItem>('menuItems').filter(m => m.tenantId === this.tenantId), 0);
     getFloorPlan = () => {
         const outlet = getTable<Outlet>('outlets').find(o => o.id === this.outletId);
-        return this.simulateDelay(outlet?.floorPlan || []);
+        return this.simulateDelay(outlet?.floorPlan || [], 0);
     };
-    getInventory = () => this.simulateDelay(getTable<InventoryItem>('inventoryItems').filter(i => i.tenantId === this.tenantId));
-    getAllUsersForTenant = () => this.simulateDelay(getTable<User>('users').filter(u => u.tenantId === this.tenantId));
+    getInventory = () => this.simulateDelay(getTable<InventoryItem>('inventoryItems').filter(i => i.tenantId === this.tenantId), 0);
+    getAllUsersForTenant = () => this.simulateDelay(getTable<User>('users').filter(u => u.tenantId === this.tenantId), 0);
     getStockMovements = (outletId: string | 'all' = this.outletId!) => {
         const movements = getTable<StockMovement>('stockMovements');
          if (outletId === 'all' && (this.userRole === 'BrandAdmin')) {
-            return this.simulateDelay(movements.filter(sm => sm.tenantId === this.tenantId));
+            return this.simulateDelay(movements.filter(sm => sm.tenantId === this.tenantId), 0);
         }
-        return this.simulateDelay(movements.filter(sm => sm.outletId === outletId));
+        return this.simulateDelay(movements.filter(sm => sm.outletId === outletId), 0);
     };
     
     // Order Management (Offline-first)
@@ -243,7 +267,7 @@ class Api {
         };
         addToTable('orders', newOrder);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(newOrder);
+        return this.simulateDelay(newOrder, 0); // Instant for creating orders
     };
 
     addItemToOrder = async (orderId: string, itemData: { itemId: string, variantId?: string, modifierIds?: string[] }): Promise<Order> => {
@@ -274,7 +298,7 @@ class Api {
 
         updateInTable('orders', order);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for adding items
     };
     
     updateItemQuantity = async (orderId: string, uniqueId: string, quantity: number): Promise<Order> => {
@@ -293,7 +317,7 @@ class Api {
              updateInTable('orders', order);
              if (this.stateChangeCallback) this.stateChangeCallback();
          }
-         return this.simulateDelay(order);
+         return this.simulateDelay(order, 0); // Instant for quantity updates
     };
     
     updateItemNotes = async (orderId: string, uniqueId: string, notes: string): Promise<Order> => {
@@ -306,7 +330,7 @@ class Api {
              updateInTable('orders', order);
              if (this.stateChangeCallback) this.stateChangeCallback();
          }
-         return this.simulateDelay(order);
+         return this.simulateDelay(order, 0); // Instant for notes
     };
     
     updateKotStatus = async (orderId: string, uniqueId: string, status: OrderItem['kotStatus']): Promise<Order> => {
@@ -319,7 +343,7 @@ class Api {
             updateInTable('orders', order);
             if (this.stateChangeCallback) this.stateChangeCallback();
         }
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for KOT status
     }
 
     recalculateTotals(order: Order) {
@@ -361,7 +385,7 @@ class Api {
         updateInTable('orders', order);
         
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for discounts
     };
 
     completePayment = async (orderId: string, payments: Payment[]): Promise<Order> => {
@@ -396,7 +420,7 @@ class Api {
         }
 
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant
     };
 
     cancelOrder = async (orderId: string, reason: string): Promise<Order> => {
@@ -406,7 +430,7 @@ class Api {
         if (!this.isOnline) order.needsSync = true;
         updateInTable('orders', order);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant
     };
 
     // Park/Hold order - moves order to parked orders list
@@ -428,7 +452,7 @@ class Api {
         
         if (this.stateChangeCallback) this.stateChangeCallback();
         if (this.toastCallback) this.toastCallback(`Order ${order.orderNumber} parked`, 'info');
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for parking
     };
 
     // Retrieve parked order - moves order back to active orders
@@ -449,13 +473,13 @@ class Api {
         
         if (this.stateChangeCallback) this.stateChangeCallback();
         if (this.toastCallback) this.toastCallback(`Order ${order.orderNumber} retrieved`, 'success');
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for retrieving
     };
 
     // Get all parked orders
     getParkedOrders = async (): Promise<Order[]> => {
         const parkedOrders = getTable<Order>('parkedOrders');
-        return this.simulateDelay(parkedOrders);
+        return this.simulateDelay(parkedOrders, 0); // Instant read
     };
 
     approveOrder = async (orderId: string): Promise<Order> => {
@@ -468,7 +492,7 @@ class Api {
         
         updateInTable('orders', order);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for approval
     };
 
     transferOrder = async (orderId: string, newTableName: string): Promise<Order> => {
@@ -480,7 +504,7 @@ class Api {
         
         updateInTable('orders', order);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(order);
+        return this.simulateDelay(order, 0); // Instant for transfer
     };
 
     mergeOrders = async (fromOrderId: string, toOrderId: string): Promise<Order> => {
@@ -506,7 +530,7 @@ class Api {
         updateInTable('orders', fromOrder);
 
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(toOrder);
+        return this.simulateDelay(toOrder, 0); // Instant
     };
     
     splitOrder = async (orderId: string, itemUniqueIdToSplit: string): Promise<Order> => {
@@ -534,7 +558,7 @@ class Api {
         updateInTable('orders', newOrder);
         
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(newOrder);
+        return this.simulateDelay(newOrder, 0); // Instant
     };
 
     private _deductInventoryForOrder = async(order: Order) => {
@@ -600,14 +624,14 @@ class Api {
         
         updateInTable('inventoryItems', item);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(item);
+        return this.simulateDelay(item, 0); // Instant
     };
 
     // Shift Management
     getCurrentShift = async (): Promise<Shift | null> => {
         const shifts = getTable<Shift>('shifts');
         const openShift = shifts.find(s => s.outletId === this.outletId && s.userId === this.userId && !s.endTime);
-        return this.simulateDelay(openShift || null);
+        return this.simulateDelay(openShift || null, 0); // Instant
     };
 
     getShifts = async (outletId: string | 'all' = this.outletId!): Promise<Shift[]> => {
@@ -640,7 +664,7 @@ class Api {
         };
         addToTable('shifts', newShift);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(newShift);
+        return this.simulateDelay(newShift, 0); // Instant
     };
     
     endShift = async (closingCash: number): Promise<Shift | undefined> => {
@@ -657,7 +681,7 @@ class Api {
         
         updateInTable('shifts', shift);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(shift);
+        return this.simulateDelay(shift, 0); // Instant
     };
     
     addCashTransaction = async (type: 'CASH_IN' | 'CASH_OUT', amount: number, reason: string): Promise<Shift | undefined> => {
@@ -676,7 +700,7 @@ class Api {
         }
         updateInTable('shifts', shift);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(shift);
+        return this.simulateDelay(shift, 0); // Instant
     };
 
     // Settings Management
@@ -693,7 +717,7 @@ class Api {
         updateInTable('outlets', outlet);
 
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(outlet);
+        return this.simulateDelay(outlet, 0); // Instant
     };
 
     saveUser = async (user: Omit<User, 'tenantId'>): Promise<User | undefined> => {
@@ -712,7 +736,7 @@ class Api {
             addToTable('users', userWithTenant);
         }
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(userWithTenant);
+        return this.simulateDelay(userWithTenant, 0); // Instant
     }
 
     deleteUser = async (userId: string): Promise<boolean | undefined> => {
@@ -722,7 +746,7 @@ class Api {
         }
         deleteFromTable('users', userId);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(true);
+        return this.simulateDelay(true, 0); // Instant
     }
     
     saveMenuItem = async (menuItem: Omit<MenuItem, 'tenantId'>): Promise<MenuItem | undefined> => {
@@ -741,7 +765,7 @@ class Api {
             addToTable('menuItems', itemWithTenant);
         }
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(itemWithTenant);
+        return this.simulateDelay(itemWithTenant, 0); // Instant
     }
 
     bulkSaveMenuItems = async (menuItems: Omit<MenuItem, 'tenantId' | 'id'>[]): Promise<void> => {
@@ -765,7 +789,7 @@ class Api {
         setTable('menuItems', allMenuItems);
         if (this.stateChangeCallback) this.stateChangeCallback();
         // FIX: Pass undefined to simulateDelay as it expects one argument.
-        return this.simulateDelay(undefined);
+        return this.simulateDelay(undefined, 0); // Instant
     }
     
     deleteMenuItem = async(itemId: string): Promise<boolean | undefined> => {
@@ -775,7 +799,7 @@ class Api {
         }
         deleteFromTable('menuItems', itemId);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(true);
+        return this.simulateDelay(true, 0); // Instant
     }
 
     updateOutletSettings = async(outletId: string, settings: Outlet['settings']): Promise<Outlet | undefined> => {
@@ -791,7 +815,7 @@ class Api {
 
         updateInTable('outlets', outlet);
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(outlet);
+        return this.simulateDelay(outlet, 0); // Instant
     }
 
     updateTenant = async(tenantData: Partial<Tenant>): Promise<Tenant | undefined> => {
@@ -809,7 +833,7 @@ class Api {
         updateInTable('tenants', updatedTenant);
 
         if (this.stateChangeCallback) this.stateChangeCallback();
-        return this.simulateDelay(updatedTenant);
+        return this.simulateDelay(updatedTenant, 0); // Instant
     }
 }
 

@@ -97,7 +97,7 @@ export default function POSView() {
 
 
     // Item Management
-    const handleSelectItem = (item: MenuItem) => {
+    const handleSelectItem = useCallback((item: MenuItem) => {
         if (!selectedOrderId) {
             addToast("Please select an order first.", 'warning');
             return;
@@ -107,66 +107,66 @@ export default function POSView() {
         } else {
             api.addItemToOrder(selectedOrderId, { itemId: item.id });
         }
-    };
+    }, [selectedOrderId, addToast, api]);
 
-    const handleAddItemWithVariant = (item: MenuItem, variant: any) => {
+    const handleAddItemWithVariant = useCallback((item: MenuItem, variant: any) => {
          if (!selectedOrderId) return;
          api.addItemToOrder(selectedOrderId, { itemId: item.id, variantId: variant.id });
          setItemForVariants(null);
-    };
+    }, [selectedOrderId, api]);
 
-    const handleUpdateQuantity = (uniqueId: string, newQuantity: number) => {
+    const handleUpdateQuantity = useCallback((uniqueId: string, newQuantity: number) => {
         if (!selectedOrderId) return;
         api.updateItemQuantity(selectedOrderId, uniqueId, newQuantity);
-    };
+    }, [selectedOrderId, api]);
 
-    const handleSaveNotes = (uniqueId: string, notes: string) => {
+    const handleSaveNotes = useCallback((uniqueId: string, notes: string) => {
         if (!selectedOrderId) return;
         api.updateItemNotes(selectedOrderId, uniqueId, notes);
         setNotesModalOpen(false);
         setItemForNotes(null);
-    };
+    }, [selectedOrderId, api]);
 
     // Order Status
-    const handleSendToKitchen = () => {
+    const handleSendToKitchen = useCallback(() => {
         if (!selectedOrderId) return;
         // In a real app, this would trigger KOT printing/updates.
         // Here, it's more of a logical step. The KDS view will see items with status 'NEW'
         addToast("Order sent to kitchen!", 'info');
-    };
+    }, [selectedOrderId, addToast]);
 
-    const handleCancelOrder = async () => {
+    const handleCancelOrder = useCallback(async () => {
         if (!selectedOrderId || !currentUser || !['OutletManager', 'BrandAdmin'].includes(currentUser.role)) return;
         if (window.confirm("Are you sure you want to cancel this order? This cannot be undone.")) {
             await api.cancelOrder(selectedOrderId, "Cancelled by manager");
             addToast(`Order #${selectedOrder?.orderNumber} cancelled.`, 'success');
             setSelectedOrderId(null);
         }
-    };
+    }, [selectedOrderId, currentUser, api, addToast, selectedOrder]);
 
 
     // Payment Flow
-    const handleStartPayment = () => {
+    const handleStartPayment = useCallback(() => {
         if (selectedOrder?.items.length) setPaymentModalOpen(true);
-    };
+    }, [selectedOrder]);
 
-    const handleCompletePayment = async (payments: any[]) => {
+    const handleCompletePayment = useCallback(async (payments: any[]) => {
         if (!selectedOrder) return;
         const paidOrder = await api.completePayment(selectedOrder.id, payments);
         setLastCompletedOrder(paidOrder);
         setSelectedOrderId(null);
         setPaymentModalOpen(false);
         setReceiptModalOpen(true);
-    };
+    }, [selectedOrder, api]);
 
-    const handleNewOrder = () => {
+    const handleNewOrder = useCallback(() => {
         setReceiptModalOpen(false);
         setLastCompletedOrder(null);
         setViewMode('floorplan');
-    };
+    }, []);
 
     // Park/Hold and Retrieve Orders
-    const handleParkOrder = async () => {
+    const handleParkOrder = useCallback(async () => {
         if (!selectedOrderId) return;
         if (!selectedOrder?.items.length) {
             addToast('Cannot park an empty order', 'warning');
@@ -179,9 +179,9 @@ export default function POSView() {
         } catch (error: any) {
             addToast(`Error: ${error.message}`, 'error');
         }
-    };
+    }, [selectedOrderId, selectedOrder, api, addToast]);
 
-    const handleRetrieveOrder = async (orderId: string) => {
+    const handleRetrieveOrder = useCallback(async (orderId: string) => {
         try {
             await api.retrieveParkedOrder(orderId);
             setSelectedOrderId(orderId);
@@ -190,10 +190,10 @@ export default function POSView() {
         } catch (error: any) {
             addToast(`Error: ${error.message}`, 'error');
         }
-    };
+    }, [api, addToast]);
 
     // Discount Management
-    const handleApplyDiscount = async (amount: number, reason: string) => {
+    const handleApplyDiscount = useCallback(async (amount: number, reason: string) => {
         if (!selectedOrderId) return;
         try {
             await api.applyDiscount(selectedOrderId, amount, reason);
@@ -201,10 +201,11 @@ export default function POSView() {
         } catch (error: any) {
             addToast(`Error: ${error.message}`, 'error');
         }
-    };
+        setDiscountModalOpen(false);
+    }, [selectedOrderId, api, addToast]);
 
     // Gemini Suggestion
-    const handleFetchSuggestion = async () => {
+    const handleFetchSuggestion = useCallback(async () => {
         if (!selectedOrder?.items.length) {
             setSuggestionError('Add items to the order first.');
             setSuggestionModalOpen(true);
@@ -222,7 +223,7 @@ export default function POSView() {
         } finally {
             setIsLoadingSuggestion(false);
         }
-    };
+    }, [selectedOrder]);
     
     // Table Management
     const handleTransferOrder = useCallback(async (newTable: string) => {
@@ -260,11 +261,10 @@ export default function POSView() {
         }
     }, [api, selectedOrder, addToast]);
 
-
-    const filteredMenuItems = useMemo(() =>
-        menuItems.filter(item => item.category === selectedCategory),
-        [selectedCategory, menuItems]
-    );
+    const filteredMenuItems = useMemo(() => {
+        if (!selectedCategory) return [];
+        return menuItems.filter(item => item.category === selectedCategory);
+    }, [selectedCategory, menuItems]);
 
     if (!currentUser || !currentTenant || !currentOutlet) {
         return <div>Loading session...</div>
