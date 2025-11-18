@@ -341,6 +341,29 @@ class Api {
         order.totalAmount = order.subtotal + order.totalTax + order.serviceCharge - order.discount.amount;
     }
     
+    applyDiscount = async (orderId: string, discountAmount: number, reason: string): Promise<Order> => {
+        let order = getTable<Order>('orders').find(o => o.id === orderId);
+        if (!order) throw new Error("Order not found");
+        if (order.status !== 'OPEN') throw new Error("Cannot apply discount to closed order");
+        
+        const maxDiscount = order.subtotal + order.totalTax + order.serviceCharge;
+        if (discountAmount < 0 || discountAmount > maxDiscount) {
+            throw new Error("Invalid discount amount");
+        }
+        
+        order.discount = {
+            amount: discountAmount,
+            reason: reason,
+            appliedBy: this.userId!
+        };
+        
+        this.recalculateTotals(order);
+        updateInTable('orders', order);
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(order);
+    };
+
     completePayment = async (orderId: string, payments: Payment[]): Promise<Order> => {
         let order = getTable<Order>('orders').find(o => o.id === orderId);
         if (!order) throw new Error("Order not found");

@@ -105,6 +105,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, order, onC
                         <span>Total Due:</span>
                         <span>{formatCurrency(totalDue)}</span>
                     </div>
+                    {order.discount.amount > 0 && (
+                        <div className="flex justify-between text-sm text-[var(--text-tertiary)] border-t border-[var(--border-color)] pt-2">
+                            <span>Discount Applied:</span>
+                            <span className="text-[var(--warning)]">- {formatCurrency(order.discount.amount)}</span>
+                        </div>
+                    )}
                     <div className="flex justify-between text-2xl font-bold text-[var(--accent-primary)]">
                         <span>Remaining:</span>
                         <span>{formatCurrency(remainingBalance)}</span>

@@ -16,6 +16,7 @@ import NotesModal from '../components/NotesModal';
 import VariantSelectionModal from '../components/menu/VariantSelectionModal';
 import InputDialog from '../components/common/InputDialog';
 import ParkedOrdersPanel from '../components/ParkedOrdersPanel';
+import DiscountModal from '../components/DiscountModal';
 
 
 export default function POSView() {
@@ -48,6 +49,7 @@ export default function POSView() {
     const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
     const [isNotesModalOpen, setNotesModalOpen] = useState(false);
     const [isParkedOrdersPanelOpen, setParkedOrdersPanelOpen] = useState(false);
+    const [isDiscountModalOpen, setDiscountModalOpen] = useState(false);
     const [suggestion, setSuggestion] = useState('');
     const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
     const [suggestionError, setSuggestionError] = useState('');
@@ -190,6 +192,17 @@ export default function POSView() {
         }
     };
 
+    // Discount Management
+    const handleApplyDiscount = async (amount: number, reason: string) => {
+        if (!selectedOrderId) return;
+        try {
+            await api.applyDiscount(selectedOrderId, amount, reason);
+            addToast(amount > 0 ? 'Discount applied successfully' : 'Discount removed', 'success');
+        } catch (error: any) {
+            addToast(`Error: ${error.message}`, 'error');
+        }
+    };
+
     // Gemini Suggestion
     const handleFetchSuggestion = async () => {
         if (!selectedOrder?.items.length) {
@@ -309,6 +322,7 @@ export default function POSView() {
                     onSendToKitchen={handleSendToKitchen}
                     onCancelOrder={handleCancelOrder}
                     onParkOrder={handleParkOrder}
+                    onApplyDiscount={() => setDiscountModalOpen(true)}
                     onEditNotes={(item) => { setItemForNotes(item); setNotesModalOpen(true); }}
                     onTransferOrder={() => setDialog({ type: 'transfer'})}
                     onMergeOrder={() => setDialog({ type: 'merge'})}
@@ -322,6 +336,12 @@ export default function POSView() {
                 onRetrieveOrder={handleRetrieveOrder}
                 isOpen={isParkedOrdersPanelOpen}
                 onClose={() => setParkedOrdersPanelOpen(false)}
+            />
+            <DiscountModal
+                isOpen={isDiscountModalOpen}
+                onClose={() => setDiscountModalOpen(false)}
+                order={selectedOrder}
+                onApplyDiscount={handleApplyDiscount}
             />
             <GeminiSuggestionModal isOpen={isSuggestionModalOpen} onClose={() => setSuggestionModalOpen(false)} suggestion={suggestion} isLoading={isLoadingSuggestion} error={suggestionError} />
             <PaymentModal isOpen={isPaymentModalOpen} onClose={() => setPaymentModalOpen(false)} order={selectedOrder} onConfirmPayment={handleCompletePayment} />

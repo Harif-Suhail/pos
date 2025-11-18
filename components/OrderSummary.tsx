@@ -12,6 +12,7 @@ interface OrderSummaryProps {
     onSendToKitchen: () => void;
     onCancelOrder: () => void;
     onParkOrder: () => void;
+    onApplyDiscount: () => void;
     onEditNotes: (item: OrderItem) => void;
     onTransferOrder: () => void;
     onMergeOrder: () => void;
@@ -20,7 +21,7 @@ interface OrderSummaryProps {
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({ 
     order, currentUser, outlet, 
-    onUpdateQuantity, onFetchSuggestion, onStartPayment, onSendToKitchen, onCancelOrder, onParkOrder, onEditNotes,
+    onUpdateQuantity, onFetchSuggestion, onStartPayment, onSendToKitchen, onCancelOrder, onParkOrder, onApplyDiscount, onEditNotes,
     onTransferOrder, onMergeOrder, onSplitOrder 
 }) => {
     
@@ -122,10 +123,27 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                         <span>{formatCurrency(serviceCharge)}</span>
                     </div>
                 )}
+                {order.discount.amount > 0 && (
+                    <div className="flex justify-between text-[var(--warning)]">
+                        <span>Discount</span>
+                        <span>- {formatCurrency(order.discount.amount)}</span>
+                    </div>
+                )}
                 <div className="flex justify-between font-bold text-xl text-[var(--text-primary)] pt-1">
                     <span>Total</span>
                     <span>{formatCurrency(totalAmount)}</span>
                 </div>
+                {!isOrderLocked && items.length > 0 && (
+                    <button
+                        onClick={onApplyDiscount}
+                        className="w-full bg-[var(--warning)] hover:bg-[var(--warning-hover)] text-white font-medium py-2 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2 mt-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        {order.discount.amount > 0 ? 'Update Discount' : 'Apply Discount'}
+                    </button>
+                )}
                 <div className="grid grid-cols-2 gap-3 pt-2">
                      <button
                         onClick={onFetchSuggestion}

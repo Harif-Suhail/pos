@@ -47,8 +47,30 @@ const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ order, tenant, outl
                 <div className="flex justify-between"><span>Subtotal:</span><span>{formatCurrency(order.subtotal)}</span></div>
                 <div className="flex justify-between"><span>Tax:</span><span>{formatCurrency(order.totalTax)}</span></div>
                 {order.serviceCharge > 0 && <div className="flex justify-between"><span>Service Charge:</span><span>{formatCurrency(order.serviceCharge)}</span></div>}
-                <div className="flex justify-between font-bold text-sm mt-1"><span>TOTAL:</span><span>{formatCurrency(order.totalAmount)}</span></div>
+                {order.discount.amount > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                        <span>Discount ({order.discount.reason}):</span>
+                        <span>- {formatCurrency(order.discount.amount)}</span>
+                    </div>
+                )}
+                <div className="flex justify-between font-bold text-sm mt-1 border-t border-black pt-1">
+                    <span>TOTAL:</span>
+                    <span>{formatCurrency(order.totalAmount)}</span>
+                </div>
             </div>
+            
+            {order.payments && order.payments.length > 0 && (
+                <div className="border-t border-dashed border-black pt-2 mt-2">
+                    <div className="font-bold mb-1">PAYMENT DETAILS:</div>
+                    {order.payments.map((payment, idx) => (
+                        <div key={idx} className="flex justify-between">
+                            <span>{payment.method}:</span>
+                            <span>{formatCurrency(payment.amount)}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            
             <div className="text-center mt-4">
                 <p>Thank you for your visit!</p>
             </div>
