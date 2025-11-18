@@ -1,4 +1,4 @@
-import { Tenant, Outlet, User, Order, MenuItem, FloorPlanObject, Shift, Payment, InventoryItem, StockMovement, OrderItem, Variant, Tax, DeliveryDetails, UserRole, ActivityLog } from '../types';
+import { Tenant, Outlet, User, Order, MenuItem, FloorPlanObject, Shift, Payment, InventoryItem, StockMovement, OrderItem, Variant, Tax, DeliveryDetails, UserRole, ActivityLog, Customer, CustomerAddress } from '../types';
 import { initializeDb } from './mockData';
 import { ToastType } from '../context/AppContext';
 
@@ -243,6 +243,21 @@ class Api {
         const orders = getTable<Order>('orders').filter(o => o.outletId === this.outletId);
         const maxOrderNumber = orders.reduce((max, o) => o.orderNumber > max ? o.orderNumber : max, 0);
 
+        // Create or update customer if customer info provided
+        let customerId: string | undefined;
+        if (data.customer?.phone) {
+            customerId = await this._upsertCustomerFromOrder(
+                data.customer.phone,
+                data.customer.name,
+                data.deliveryDetails?.address
+            );
+        } else if (data.deliveryDetails?.customerPhone) {
+            customerId = await this._upsertCustomerFromOrder(
+                data.deliveryDetails.customerPhone,
+                data.deliveryDetails.customerName,
+                data.deliveryDetails.address
+            );
+        }
         
         const newOrder: Order = {
             id: `ord_${Date.now()}`,
@@ -252,6 +267,7 @@ class Api {
             type: data.type,
             table: data.table,
             customer: data.customer,
+            customerId,
             deliveryDetails: data.deliveryDetails,
             status: data.type === 'QR' ? 'PENDING_APPROVAL' : 'OPEN',
             items: [],
@@ -402,6 +418,16 @@ class Api {
         updateInTable('orders', order);
         
         await this._deductInventoryForOrder(order);
+
+        // Update customer's total spent
+        if (order.customerId) {
+            const customer = getTable<Customer>('customers').find(c => c.id === order.customerId);
+            if (customer) {
+                customer.totalSpent += order.totalAmount;
+                customer.updatedAt = Date.now();
+                updateInTable('customers', customer);
+            }
+        }
 
         // Update shift with cash payments
         const currentShift = await this.getCurrentShift();
@@ -748,6 +774,132 @@ class Api {
         deleteFromTable('users', userId);
         if (this.stateChangeCallback) this.stateChangeCallback();
         return this.simulateDelay(true, 0); // Instant
+    }
+
+    // ========= CUSTOMER MANAGEMENT =========
+    
+    getCustomers = () => {
+        if (!this.tenantId) throw new Error("Not authenticated");
+        return this.simulateDelay(
+            getTable<Customer>('customers').filter(c => c.tenantId === this.tenantId),
+            0
+        );
+    }
+
+    getCustomerByPhone = (phone: string) => {
+        if (!this.tenantId) throw new Error("Not authenticated");
+        const customers = getTable<Customer>('customers');
+        return this.simulateDelay(
+            customers.find(c => c.tenantId === this.tenantId && c.phone === phone) || null,
+            0
+        );
+    }
+
+    searchCustomers = (query: string) => {
+        if (!this.tenantId) throw new Error("Not authenticated");
+        const customers = getTable<Customer>('customers').filter(c => c.tenantId === this.tenantId);
+        const lowerQuery = query.toLowerCase();
+        return this.simulateDelay(
+            customers.filter(c => 
+                c.name.toLowerCase().includes(lowerQuery) ||
+                c.phone.includes(query) ||
+                c.email?.toLowerCase().includes(lowerQuery)
+            ),
+            0
+        );
+    }
+
+    saveCustomer = async (customer: Omit<Customer, 'tenantId' | 'createdAt' | 'updatedAt'>): Promise<Customer | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('saveCustomer', customer);
+            return Promise.resolve(undefined);
+        }
+        if (!this.tenantId) throw new Error("Not authenticated");
+
+        const now = Date.now();
+        const customerWithTenant: Customer = {
+            ...customer,
+            tenantId: this.tenantId,
+            createdAt: customer.id ? (getTable<Customer>('customers').find(c => c.id === customer.id)?.createdAt || now) : now,
+            updatedAt: now
+        };
+
+        if (customer.id) {
+            // Update existing
+            updateInTable('customers', customerWithTenant);
+        } else {
+            // Create new
+            customerWithTenant.id = `cust_${Date.now()}`;
+            addToTable('customers', customerWithTenant);
+        }
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(customerWithTenant, 0);
+    }
+
+    deleteCustomer = async (customerId: string): Promise<boolean | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('deleteCustomer', customerId);
+            return Promise.resolve(undefined);
+        }
+        deleteFromTable('customers', customerId);
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(true, 0);
+    }
+
+    getCustomerOrderHistory = async (customerId: string): Promise<Order[]> => {
+        if (!this.tenantId) throw new Error("Not authenticated");
+        const orders = getTable<Order>('orders');
+        return this.simulateDelay(
+            orders.filter(o => o.customerId === customerId && o.status === 'PAID')
+                .sort((a, b) => b.createdAt - a.createdAt),
+            0
+        );
+    }
+
+    // Helper to create or update customer from order
+    _upsertCustomerFromOrder = async (phone: string, name: string, address?: string): Promise<string> => {
+        const existing = await this.getCustomerByPhone(phone);
+        
+        if (existing) {
+            // Update stats only - don't modify addresses unless new one provided
+            const updated: Customer = {
+                ...existing,
+                name: name || existing.name, // Update name if provided
+                totalOrders: existing.totalOrders + 1,
+                lastOrderDate: Date.now(),
+                updatedAt: Date.now()
+            };
+
+            // If new address provided and not already in list, add it
+            if (address && !existing.addresses.some(a => a.address === address)) {
+                updated.addresses.push({
+                    id: `addr_${Date.now()}`,
+                    label: `Address ${existing.addresses.length + 1}`,
+                    address: address,
+                    isDefault: existing.addresses.length === 0
+                });
+            }
+
+            await this.saveCustomer(updated);
+            return existing.id;
+        } else {
+            // Create new customer
+            const newCustomer = await this.saveCustomer({
+                id: '',
+                phone,
+                name,
+                addresses: address ? [{
+                    id: `addr_${Date.now()}`,
+                    label: 'Home',
+                    address,
+                    isDefault: true
+                }] : [],
+                totalOrders: 1,
+                totalSpent: 0,
+                lastOrderDate: Date.now()
+            });
+            return newCustomer!.id;
+        }
     }
     
     saveMenuItem = async (menuItem: Omit<MenuItem, 'tenantId'>): Promise<MenuItem | undefined> => {

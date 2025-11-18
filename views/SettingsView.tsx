@@ -5,8 +5,9 @@ import MenuSettings from '../components/settings/MenuSettings';
 import OutletSettings from '../components/settings/OutletSettings';
 import FloorPlanSettings from '../components/settings/FloorPlanSettings';
 import BrandSettings from '../components/settings/BrandSettings';
+import CustomerManagement from '../components/settings/CustomerManagement';
 
-type SettingsTab = 'brand' | 'users' | 'menu' | 'outlet' | 'floorplan';
+type SettingsTab = 'brand' | 'users' | 'customers' | 'menu' | 'outlet' | 'floorplan';
 
 export default function SettingsView() {
     const { currentUser } = useAppContext();
@@ -15,6 +16,7 @@ export default function SettingsView() {
     const allTabs: { id: SettingsTab; label: string; roles: string[] }[] = [
         { id: 'brand', label: 'Brand', roles: ['BrandAdmin'] },
         { id: 'users', label: 'Users', roles: ['BrandAdmin', 'OutletManager'] },
+        { id: 'customers', label: '👥 Customers', roles: ['BrandAdmin', 'OutletManager', 'Cashier'] },
         { id: 'menu', label: 'Menu', roles: ['BrandAdmin', 'OutletManager'] },
         { id: 'outlet', label: 'Outlet', roles: ['BrandAdmin', 'OutletManager'] },
         { id: 'floorplan', label: 'Floor Plan', roles: ['BrandAdmin', 'OutletManager'] },
@@ -51,6 +53,7 @@ export default function SettingsView() {
             <div className="flex-grow">
                 {activeTab === 'brand' && <BrandSettings />}
                 {activeTab === 'users' && <UserSettings />}
+                {activeTab === 'customers' && <CustomerManagement />}
                 {activeTab === 'menu' && <MenuSettings />}
                 {activeTab === 'outlet' && <OutletSettings />}
                 {activeTab === 'floorplan' && <FloorPlanSettings />}

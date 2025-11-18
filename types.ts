@@ -287,6 +287,30 @@ export interface DeliveryDetails {
     instructions?: string;
 }
 
+// ========= CUSTOMER MANAGEMENT =========
+export interface CustomerAddress {
+  id: string;
+  label: string; // e.g., "Home", "Office"
+  address: string;
+  isDefault: boolean;
+}
+
+export interface Customer {
+  id: string;
+  tenantId: string;
+  phone: string; // Primary identifier (unique per tenant)
+  name: string;
+  email?: string;
+  addresses: CustomerAddress[];
+  notes?: string;
+  tags?: string[]; // e.g., "VIP", "Regular", "Allergies"
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderDate?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Order {
   id: string;
   tenantId: string;
@@ -296,6 +320,7 @@ export interface Order {
   status: OrderStatus;
   table?: string;
   customer?: { name: string; phone: string };
+  customerId?: string; // Link to Customer entity for history tracking
   deliveryDetails?: DeliveryDetails;
   items: OrderItem[];
   subtotal: number;

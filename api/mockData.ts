@@ -1,4 +1,4 @@
-import { Tenant, Outlet, User, MenuItem, InventoryItem, FloorPlanObject, DayOfWeek, OpeningHour } from '../types';
+import { Tenant, Outlet, User, MenuItem, InventoryItem, FloorPlanObject, DayOfWeek, OpeningHour, Customer } from '../types';
 
 export const MOCK_TENANTS: Tenant[] = [
     { id: 't1', name: 'The Pizza Palace', subdomain: 'pizzapalace', logoUrl: 'https://cdn-icons-png.flaticon.com/512/3595/3595458.png', settings: { currency: 'USD', timezone: 'UTC-5' } },
@@ -102,6 +102,78 @@ export const MOCK_INVENTORY: InventoryItem[] = [
     { id: 'inv5', tenantId: 't1', name: 'Coke Can', unit: 'piece', category: 'Beverages', stockByOutlet: { o1: 200, o2: 150 }, reorderLevelByOutlet: { o1: 50, o2: 50 } },
 ];
 
+export const MOCK_CUSTOMERS: Customer[] = [
+    {
+        id: 'cust_1',
+        tenantId: 't1',
+        phone: '+1234567890',
+        name: 'John Doe',
+        email: 'john.doe@email.com',
+        addresses: [
+            {
+                id: 'addr_1',
+                label: 'Home',
+                address: '123 Main St, Apt 4B, New York, NY 10001',
+                isDefault: true
+            },
+            {
+                id: 'addr_2',
+                label: 'Office',
+                address: '456 Business Ave, Suite 200, New York, NY 10002',
+                isDefault: false
+            }
+        ],
+        tags: ['Regular', 'VIP'],
+        notes: 'Prefers extra cheese',
+        totalOrders: 15,
+        totalSpent: 285.50,
+        lastOrderDate: Date.now() - 86400000, // 1 day ago
+        createdAt: Date.now() - 7776000000, // 90 days ago
+        updatedAt: Date.now() - 86400000
+    },
+    {
+        id: 'cust_2',
+        tenantId: 't1',
+        phone: '+9876543210',
+        name: 'Jane Smith',
+        email: 'jane.smith@email.com',
+        addresses: [
+            {
+                id: 'addr_3',
+                label: 'Home',
+                address: '789 Park Avenue, Brooklyn, NY 11201',
+                isDefault: true
+            }
+        ],
+        tags: ['Regular'],
+        totalOrders: 8,
+        totalSpent: 142.30,
+        lastOrderDate: Date.now() - 259200000, // 3 days ago
+        createdAt: Date.now() - 5184000000, // 60 days ago
+        updatedAt: Date.now() - 259200000
+    },
+    {
+        id: 'cust_3',
+        tenantId: 't1',
+        phone: '+1122334455',
+        name: 'Mike Johnson',
+        addresses: [
+            {
+                id: 'addr_4',
+                label: 'Home',
+                address: '321 Oak Street, Queens, NY 11354',
+                isDefault: true
+            }
+        ],
+        tags: [],
+        totalOrders: 3,
+        totalSpent: 67.80,
+        lastOrderDate: Date.now() - 604800000, // 7 days ago
+        createdAt: Date.now() - 2592000000, // 30 days ago
+        updatedAt: Date.now() - 604800000
+    }
+];
+
 export const MOCK_MENU_ITEMS: MenuItem[] = [
     { 
         id: 'm1', tenantId: 't1', name: 'Margherita Pizza', description: 'Classic cheese and tomato pizza.', category: 'Pizzas', basePrice: 12.00, 
@@ -193,6 +265,7 @@ export const initializeDb = () => {
         localStorage.setItem('db_users', JSON.stringify(MOCK_USERS));
         localStorage.setItem('db_menuItems', JSON.stringify(MOCK_MENU_ITEMS));
         localStorage.setItem('db_inventoryItems', JSON.stringify(MOCK_INVENTORY));
+        localStorage.setItem('db_customers', JSON.stringify(MOCK_CUSTOMERS));
         localStorage.setItem('db_orders', JSON.stringify([MOCK_QR_ORDER]));
         localStorage.setItem('db_shifts', JSON.stringify([]));
         localStorage.setItem('db_stockMovements', JSON.stringify([]));
