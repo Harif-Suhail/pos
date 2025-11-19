@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../hooks/useAppContext';
 import Modal from '../common/Modal';
-import { formatCurrency } from '../../utils/helpers';
+import { useCurrency } from '../../hooks/useCurrency';
 import Spinner from '../common/Spinner';
 
 const ShiftManagementModal: React.FC = () => {
     const { currentShift, api, setShiftModalOpen, syncData, addToast } = useAppContext();
+    const { formatCurrency } = useCurrency();
     const [openingCash, setOpeningCash] = useState('');
     const [closingCash, setClosingCash] = useState('');
     const [cashTransAmount, setCashTransAmount] = useState('');

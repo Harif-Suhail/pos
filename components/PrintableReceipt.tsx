@@ -1,6 +1,7 @@
 import React from 'react';
 import { Order, Tenant, Outlet } from '../types';
-import { formatCurrency, formatTimestamp } from '../utils/helpers';
+import { formatTimestamp } from '../utils/helpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface PrintableReceiptProps {
     order: Order;
@@ -9,6 +10,8 @@ interface PrintableReceiptProps {
 }
 
 const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ order, tenant, outlet }) => {
+    const { formatCurrency } = useCurrency();
+    
     return (
         <div id="printable-receipt" className="bg-white text-black p-4 font-mono text-xs w-[300px]">
             <div className="text-center mb-4">

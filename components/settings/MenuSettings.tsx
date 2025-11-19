@@ -4,7 +4,7 @@ import { MenuItem, KitchenStation, Variant, ModifierGroup, ModifierOption, Recip
 import Modal from '../common/Modal';
 import Spinner from '../common/Spinner';
 import InputDialog from '../common/InputDialog';
-import { formatCurrency } from '../../utils/helpers';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const KITCHEN_STATIONS: KitchenStation[] = ['Main Kitchen', 'Bar', 'Desserts'];
 
@@ -53,6 +53,7 @@ interface CSVImportRow {
 
 const MenuSettings: React.FC = () => {
     const { menuItems, menuCategories, api, syncData, inventory, addToast } = useAppContext();
+    const { formatCurrency } = useCurrency();
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Order, Tenant, Outlet } from '../types';
-import { formatCurrency, formatTimestamp } from '../utils/helpers';
+import { formatTimestamp } from '../utils/helpers';
+import { useCurrency } from '../hooks/useCurrency';
 import PrintableReceipt from './PrintableReceipt';
 
 interface ReceiptModalProps {
@@ -12,6 +13,7 @@ interface ReceiptModalProps {
 }
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, order, tenant, outlet }) => {
+    const { formatCurrency } = useCurrency();
     const [showWhatsAppInput, setShowWhatsAppInput] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState('');
 

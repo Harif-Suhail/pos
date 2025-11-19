@@ -145,6 +145,7 @@ export class PrinterService {
         outlet: Outlet,
         config: PrinterConfig
     ): Promise<boolean> {
+        const currency = tenant.settings?.currency || 'USD';
         let receipt = ESC_POS.INIT;
         
         // Header
@@ -194,7 +195,7 @@ export class PrinterService {
             
             receipt += this.padLine(
                 `${item.quantity}x ${itemName}`,
-                formatCurrency(total)
+                formatCurrency(total, currency)
             );
             
             if (item.selectedModifiers && item.selectedModifiers.length > 0) {
@@ -211,24 +212,24 @@ export class PrinterService {
         receipt += this.line();
         
         // Totals
-        receipt += this.padLine('Subtotal:', formatCurrency(order.subtotal));
-        receipt += this.padLine('Tax:', formatCurrency(order.totalTax));
+        receipt += this.padLine('Subtotal:', formatCurrency(order.subtotal, currency));
+        receipt += this.padLine('Tax:', formatCurrency(order.totalTax, currency));
         
         if (order.serviceCharge > 0) {
-            receipt += this.padLine('Service Charge:', formatCurrency(order.serviceCharge));
+            receipt += this.padLine('Service Charge:', formatCurrency(order.serviceCharge, currency));
         }
         
         if (order.discount.amount > 0) {
             receipt += this.padLine(
                 `Discount (${order.discount.reason}):`,
-                `-${formatCurrency(order.discount.amount)}`
+                `-${formatCurrency(order.discount.amount, currency)}`
             );
         }
         
         receipt += this.line(42, '=');
         receipt += ESC_POS.DOUBLE_HEIGHT;
         receipt += ESC_POS.BOLD_ON;
-        receipt += this.padLine('TOTAL:', formatCurrency(order.totalAmount));
+        receipt += this.padLine('TOTAL:', formatCurrency(order.totalAmount, currency));
         receipt += ESC_POS.NORMAL_TEXT;
         receipt += ESC_POS.BOLD_OFF;
         receipt += this.line(42, '=');
@@ -240,14 +241,14 @@ export class PrinterService {
             receipt += 'PAYMENT:\n';
             receipt += ESC_POS.BOLD_OFF;
             order.payments.forEach(payment => {
-                receipt += this.padLine(payment.method, formatCurrency(payment.amount));
+                receipt += this.padLine(payment.method, formatCurrency(payment.amount, currency));
             });
             
             const totalPaid = order.payments.reduce((sum, p) => sum + p.amount, 0);
             const change = totalPaid - order.totalAmount;
             
             if (change > 0) {
-                receipt += this.padLine('Change:', formatCurrency(change));
+                receipt += this.padLine('Change:', formatCurrency(change, currency));
             }
             receipt += this.line();
         }

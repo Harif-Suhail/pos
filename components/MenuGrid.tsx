@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { MenuItem } from '../types';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface MenuGridProps {
     items: MenuItem[];
@@ -7,6 +8,7 @@ interface MenuGridProps {
 }
 
 const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) => void }> = memo(({ item, onSelectItem }) => {
+    const { formatCurrency } = useCurrency();
     const isOutOfStock = item.stock !== undefined && item.stock <= 0;
     const isUnavailable = item.available === false;
     const isDisabled = isOutOfStock || isUnavailable;
@@ -31,7 +33,7 @@ const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) =>
             <img src={item.image} alt={item.name} className="w-full h-32 object-cover" />
             <div className="p-4">
                 <h3 className="font-semibold text-[var(--text-primary)] truncate">{item.name}</h3>
-                <p className="text-[var(--text-secondary)] mt-1">${item.basePrice.toFixed(2)}</p>
+                <p className="text-[var(--text-secondary)] mt-1">{formatCurrency(item.basePrice)}</p>
             </div>
         </button>
     );

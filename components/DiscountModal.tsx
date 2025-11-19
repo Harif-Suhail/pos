@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Order } from '../types';
-import { formatCurrency } from '../utils/helpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface DiscountModalProps {
     isOpen: boolean;
@@ -11,6 +11,7 @@ interface DiscountModalProps {
 }
 
 const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, order, onApplyDiscount }) => {
+    const { formatCurrency } = useCurrency();
     const [discountType, setDiscountType] = useState<'amount' | 'percentage'>('percentage');
     const [discountValue, setDiscountValue] = useState('');
     const [reason, setReason] = useState('');

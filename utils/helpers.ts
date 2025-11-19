@@ -1,9 +1,16 @@
 import { User, Permission, ROLE_PERMISSIONS } from '../types';
 
-// In a real app, this would use a library like date-fns or moment.js
-// And Intl.NumberFormat for currency
-export const formatCurrency = (amount: number): string => {
-    return `$${amount.toFixed(2)}`;
+// Currency formatting function that can use tenant currency settings
+export const formatCurrency = (amount: number, currency: string = 'USD'): string => {
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency,
+        }).format(amount);
+    } catch (error) {
+        // Fallback if currency code is invalid
+        return `${currency} ${amount.toFixed(2)}`;
+    }
 };
 
 export const formatTimestamp = (timestamp: number): string => {

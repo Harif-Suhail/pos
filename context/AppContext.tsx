@@ -153,6 +153,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.getTenants().then(setTenants);
     }, [api]);
 
+    // Listen for tenant updates across tabs/windows
+    useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'db_tenants' && currentTenant) {
+                // Tenant data changed, refresh current tenant
+                api.getTenantById(currentTenant.id).then(refreshedTenant => {
+                    if (refreshedTenant) {
+                        setCurrentTenant(refreshedTenant);
+                        console.log('Tenant updated from external change:', refreshedTenant);
+                    }
+                });
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, [api, currentTenant?.id]);
+
     useEffect(() => {
         if (currentTenant) {
             api.getOutlets(currentTenant.id).then(outlets => {

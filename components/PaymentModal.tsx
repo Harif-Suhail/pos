@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Order, Payment } from '../types';
-import { formatCurrency } from '../utils/helpers';
+import { useCurrency } from '../hooks/useCurrency';
 import { useAppContext } from '../hooks/useAppContext';
 
 interface PaymentModalProps {
@@ -12,6 +12,7 @@ interface PaymentModalProps {
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, order, onConfirmPayment }) => {
     const { addToast } = useAppContext();
+    const { formatCurrency } = useCurrency();
     const [payments, setPayments] = useState<Payment[]>([]);
     const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
     const [currentPaymentMethod, setCurrentPaymentMethod] = useState<Payment['method']>('Cash');

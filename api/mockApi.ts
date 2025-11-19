@@ -1239,6 +1239,7 @@ class Api {
         });
 
         if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Tenant "${updatedTenant.name}" updated successfully`, 'success');
         return this.simulateDelay(updatedTenant, 0); // Instant
     }
 

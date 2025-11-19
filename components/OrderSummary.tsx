@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Order, OrderItem, User, Outlet, Permission } from '../types';
-import { formatCurrency, hasPermission } from '../utils/helpers';
+import { hasPermission } from '../utils/helpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface OrderSummaryProps {
     order: Order | null;
@@ -24,6 +25,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = memo(({
     onUpdateQuantity, onFetchSuggestion, onStartPayment, onSendToKitchen, onCancelOrder, onParkOrder, onApplyDiscount, onEditNotes,
     onTransferOrder, onMergeOrder, onSplitOrder 
 }) => {
+    const { formatCurrency } = useCurrency();
     
     if (!order) {
         return (

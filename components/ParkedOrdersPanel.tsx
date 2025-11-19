@@ -1,6 +1,6 @@
 import React from 'react';
 import { Order } from '../types';
-import { formatCurrency } from '../utils/helpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface ParkedOrdersPanelProps {
     parkedOrders: Order[];
@@ -15,6 +15,8 @@ const ParkedOrdersPanel: React.FC<ParkedOrdersPanelProps> = ({
     isOpen,
     onClose
 }) => {
+    const { formatCurrency } = useCurrency();
+    
     if (!isOpen) return null;
 
     const getParkedDuration = (parkedAt?: string) => {
