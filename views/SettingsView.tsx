@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 import UserSettings from '../components/settings/UserSettings';
 import MenuSettings from '../components/settings/MenuSettings';
-import OutletSettings from '../components/settings/OutletSettings';
 import FloorPlanSettings from '../components/settings/FloorPlanSettings';
 import BrandSettings from '../components/settings/BrandSettings';
 import CustomerManagement from '../components/settings/CustomerManagement';
 import PrinterSettings from '../components/settings/PrinterSettings';
 import MultiOutletSettings from '../components/settings/MultiOutletSettings';
+import OutletManagement from '../components/settings/OutletManagement';
 
-type SettingsTab = 'brand' | 'users' | 'customers' | 'menu' | 'outlet' | 'floorplan' | 'printers' | 'multi-outlet';
+type SettingsTab = 'brand' | 'outlets' | 'users' | 'customers' | 'menu' | 'floorplan' | 'printers' | 'multi-outlet';
 
 export default function SettingsView() {
     const { currentUser } = useAppContext();
@@ -17,11 +17,11 @@ export default function SettingsView() {
 
     const allTabs: { id: SettingsTab; label: string; roles: string[] }[] = [
         { id: 'brand', label: 'Brand', roles: ['BrandAdmin'] },
+        { id: 'outlets', label: '🏪 Outlets', roles: ['BrandAdmin'] },
         { id: 'multi-outlet', label: '🏢 Multi-Outlet', roles: ['BrandAdmin'] },
         { id: 'users', label: 'Users', roles: ['BrandAdmin', 'OutletManager'] },
         { id: 'customers', label: '👥 Customers', roles: ['BrandAdmin', 'OutletManager', 'Cashier'] },
         { id: 'menu', label: 'Menu', roles: ['BrandAdmin', 'OutletManager'] },
-        { id: 'outlet', label: 'Outlet', roles: ['BrandAdmin', 'OutletManager'] },
         { id: 'floorplan', label: 'Floor Plan', roles: ['BrandAdmin', 'OutletManager'] },
         { id: 'printers', label: '🖨️ Printers', roles: ['BrandAdmin', 'OutletManager'] },
     ];
@@ -56,11 +56,11 @@ export default function SettingsView() {
 
             <div className="flex-grow">
                 {activeTab === 'brand' && <BrandSettings />}
+                {activeTab === 'outlets' && <OutletManagement />}
                 {activeTab === 'multi-outlet' && <MultiOutletSettings />}
                 {activeTab === 'users' && <UserSettings />}
                 {activeTab === 'customers' && <CustomerManagement />}
                 {activeTab === 'menu' && <MenuSettings />}
-                {activeTab === 'outlet' && <OutletSettings />}
                 {activeTab === 'floorplan' && <FloorPlanSettings />}
                 {activeTab === 'printers' && <PrinterSettings />}
             </div>

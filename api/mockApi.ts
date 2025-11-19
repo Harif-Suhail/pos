@@ -1008,6 +1008,103 @@ class Api {
         return this.simulateDelay(outlet, 0);
     }
 
+    createOutlet = async(outlet: Omit<Outlet, 'id'>): Promise<Outlet | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('createOutlet', outlet);
+            return Promise.resolve(undefined);
+        }
+        if (!this.tenantId) throw new Error("Not authenticated");
+        
+        const newOutlet: Outlet = {
+            ...outlet,
+            id: `o${Date.now()}`,
+            tenantId: this.tenantId
+        };
+        
+        addToTable('outlets', newOutlet);
+        
+        // Log activity
+        this.logActivity({
+            tenantId: this.tenantId,
+            outletId: this.outletId || newOutlet.id,
+            userId: this.userId || 'system',
+            action: 'CREATE_OUTLET',
+            details: { outletId: newOutlet.id, outletName: newOutlet.name }
+        });
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Outlet "${newOutlet.name}" created successfully`, 'success');
+        return this.simulateDelay(newOutlet, 100);
+    }
+
+    updateOutlet = async(outletId: string, updates: Partial<Outlet>): Promise<Outlet | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('updateOutlet', outletId, updates);
+            return Promise.resolve(undefined);
+        }
+        if (!this.tenantId) throw new Error("Not authenticated");
+        
+        const outlets = getTable<Outlet>('outlets');
+        const outlet = outlets.find(o => o.id === outletId && o.tenantId === this.tenantId);
+        if (!outlet) throw new Error("Outlet not found");
+        
+        const updatedOutlet: Outlet = { ...outlet, ...updates, id: outlet.id, tenantId: outlet.tenantId };
+        updateInTable('outlets', updatedOutlet);
+        
+        // Log activity
+        this.logActivity({
+            tenantId: this.tenantId,
+            outletId: this.outletId || updatedOutlet.id,
+            userId: this.userId || 'system',
+            action: 'UPDATE_OUTLET',
+            details: { outletId: updatedOutlet.id, outletName: updatedOutlet.name }
+        });
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Outlet "${updatedOutlet.name}" updated successfully`, 'success');
+        return this.simulateDelay(updatedOutlet, 100);
+    }
+
+    deleteOutlet = async(outletId: string): Promise<void> => {
+        if (!this.isOnline) {
+            this.queueAction('deleteOutlet', outletId);
+            return Promise.resolve();
+        }
+        if (!this.tenantId) throw new Error("Not authenticated");
+        
+        const outlets = getTable<Outlet>('outlets');
+        const outlet = outlets.find(o => o.id === outletId && o.tenantId === this.tenantId);
+        if (!outlet) throw new Error("Outlet not found");
+        
+        // Check if there are any orders associated with this outlet
+        const orders = getTable<Order>('orders').filter(o => o.outletId === outletId);
+        
+        if (orders.length > 0) {
+            if (this.toastCallback) {
+                this.toastCallback(
+                    `Cannot delete outlet "${outlet.name}". It has ${orders.length} orders.`,
+                    'error'
+                );
+            }
+            throw new Error("Cannot delete outlet with existing orders");
+        }
+        
+        deleteFromTable('outlets', outletId);
+        
+        // Log activity
+        this.logActivity({
+            tenantId: this.tenantId,
+            outletId: this.outletId || outletId,
+            userId: this.userId || 'system',
+            action: 'DELETE_OUTLET',
+            details: { outletId: outlet.id, outletName: outlet.name }
+        });
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Outlet "${outlet.name}" deleted successfully`, 'success');
+        return this.simulateDelay(undefined, 100);
+    }
+
     updateTenant = async(tenantData: Partial<Tenant>): Promise<Tenant | undefined> => {
         if (!this.isOnline) {
             this.queueAction('updateTenant', tenantData);
