@@ -3,6 +3,7 @@ import { OrderItem, MenuItem, Order, DeliveryDetails, Permission } from '../type
 import { getUpsellSuggestion } from '../services/geminiService';
 import { useAppContext } from '../hooks/useAppContext';
 import { hasPermission } from '../utils/helpers';
+import { printerService } from '../services/printerService';
 
 // Components
 import CategoryTabs from '../components/CategoryTabs';
@@ -201,6 +202,29 @@ export default function POSView() {
                     payments 
                 }
             });
+        }
+        
+        // Print receipt if printer is configured
+        if (currentOutlet?.settings?.printerSettings?.receiptPrinterUrl && paidOrder && currentTenant) {
+            try {
+                const printerConfig = {
+                    printerUrl: currentOutlet.settings.printerSettings.receiptPrinterUrl,
+                    printerType: 'receipt' as const,
+                    paperWidth: 80 as const,
+                    cashDrawerPin: 2 as const
+                };
+                
+                await printerService.printReceipt(paidOrder, currentTenant, currentOutlet, printerConfig);
+                
+                // Open cash drawer if payment includes cash
+                const hasCashPayment = payments.some(p => p.method === 'Cash');
+                if (hasCashPayment) {
+                    await printerService.openCashDrawer(printerConfig);
+                }
+            } catch (error) {
+                console.error('Printer error:', error);
+                addToast('Payment completed, but printer failed', 'warning');
+            }
         }
         
         setLastCompletedOrder(paidOrder);

@@ -221,7 +221,25 @@ class Api {
         }
         return this.simulateDelay(orders.filter(o => o.outletId === outletId), 0);
     };
-    getMenu = () => this.simulateDelay(getTable<MenuItem>('menuItems').filter(m => m.tenantId === this.tenantId), 0);
+    
+    getMenu = () => {
+        const allMenuItems = getTable<MenuItem>('menuItems').filter(m => m.tenantId === this.tenantId);
+        
+        // Filter by outlet availability if outlet is set
+        if (this.outletId) {
+            return this.simulateDelay(
+                allMenuItems.filter(item => 
+                    !item.availableOutletIds || // If not specified, available everywhere
+                    item.availableOutletIds.length === 0 || // If empty array, available everywhere
+                    item.availableOutletIds.includes(this.outletId!) // Otherwise, check if current outlet is in the list
+                ),
+                0
+            );
+        }
+        
+        return this.simulateDelay(allMenuItems, 0);
+    };
+    
     getFloorPlan = () => {
         const outlet = getTable<Outlet>('outlets').find(o => o.id === this.outletId);
         return this.simulateDelay(outlet?.floorPlan || [], 0);
@@ -969,6 +987,25 @@ class Api {
         updateInTable('outlets', outlet);
         if (this.stateChangeCallback) this.stateChangeCallback();
         return this.simulateDelay(outlet, 0); // Instant
+    }
+    
+    saveOutlet = async(outlet: Outlet): Promise<Outlet | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('saveOutlet', outlet);
+            return Promise.resolve(undefined);
+        }
+        const outlets = getTable<Outlet>('outlets');
+        const existingIndex = outlets.findIndex(o => o.id === outlet.id);
+        
+        if (existingIndex !== -1) {
+            outlets[existingIndex] = outlet;
+        } else {
+            outlets.push(outlet);
+        }
+        
+        updateInTable('outlets', outlet);
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(outlet, 0);
     }
 
     updateTenant = async(tenantData: Partial<Tenant>): Promise<Tenant | undefined> => {

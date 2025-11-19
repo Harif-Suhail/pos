@@ -250,6 +250,8 @@ export interface MenuItem {
   recipe?: RecipeComponent[];
   stock?: number; // Simple stock for items without recipes
   available?: boolean; // Whether item is currently available for ordering
+  availableOutletIds?: string[]; // If specified, only available at these outlets. If empty/undefined, available at all outlets
+  outletSpecificPricing?: Record<string, number>; // Outlet-specific base prices (outletId -> price)
 }
 
 
