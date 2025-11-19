@@ -55,7 +55,7 @@ export interface Outlet {
   floorPlan: FloorPlanObject[];
 }
 
-export type UserRole = 'BrandAdmin' | 'OutletManager' | 'Cashier' | 'Waiter' | 'KitchenStaff' | 'Accountant';
+export type UserRole = 'SuperAdmin' | 'BrandAdmin' | 'OutletManager' | 'Cashier' | 'Waiter' | 'KitchenStaff' | 'Accountant';
 
 // Permissions enum for fine-grained access control
 export enum Permission {
@@ -95,10 +95,42 @@ export enum Permission {
   // Kitchen
   CAN_VIEW_KDS = 'CAN_VIEW_KDS',
   CAN_MARK_ORDER_READY = 'CAN_MARK_ORDER_READY',
+  
+  // System Administration (SuperAdmin only)
+  CAN_MANAGE_TENANTS = 'CAN_MANAGE_TENANTS',
+  CAN_MANAGE_SYSTEM_SETTINGS = 'CAN_MANAGE_SYSTEM_SETTINGS',
+  CAN_VIEW_SYSTEM_ANALYTICS = 'CAN_VIEW_SYSTEM_ANALYTICS',
 }
 
 // Role-based permission mappings
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  SuperAdmin: [
+    // System-level access - all permissions including system management
+    Permission.CAN_MANAGE_TENANTS,
+    Permission.CAN_MANAGE_SYSTEM_SETTINGS,
+    Permission.CAN_VIEW_SYSTEM_ANALYTICS,
+    Permission.CAN_PROCESS_PAYMENT,
+    Permission.CAN_VIEW_ORDERS,
+    Permission.CAN_CREATE_ORDER,
+    Permission.CAN_MODIFY_ORDER,
+    Permission.CAN_CANCEL_ORDER,
+    Permission.CAN_PARK_ORDER,
+    Permission.CAN_APPLY_DISCOUNT,
+    Permission.CAN_CHANGE_PRICE,
+    Permission.CAN_MANAGE_MENU,
+    Permission.CAN_MANAGE_INVENTORY,
+    Permission.CAN_VIEW_INVENTORY,
+    Permission.CAN_VIEW_REPORTS,
+    Permission.CAN_VIEW_ALL_OUTLETS,
+    Permission.CAN_MANAGE_USERS,
+    Permission.CAN_MANAGE_SETTINGS,
+    Permission.CAN_MANAGE_FLOOR_PLAN,
+    Permission.CAN_MANAGE_OUTLETS,
+    Permission.CAN_MANAGE_SHIFTS,
+    Permission.CAN_VIEW_SHIFTS,
+    Permission.CAN_VIEW_KDS,
+    Permission.CAN_MARK_ORDER_READY,
+  ],
   BrandAdmin: [
     // Full access - all permissions
     Permission.CAN_PROCESS_PAYMENT,
@@ -191,6 +223,15 @@ export interface User {
   role: UserRole;
   assignedOutletIds: string[];
   permissions?: Permission[]; // Optional: custom permissions override
+}
+
+// SuperAdmin account (separate from tenant users)
+export interface SuperAdminAccount {
+  id: string;
+  username: string;
+  password: string; // In production, this should be hashed
+  name: string;
+  email?: string;
 }
 
 export interface ActivityLog {

@@ -1,4 +1,15 @@
-import { Tenant, Outlet, User, MenuItem, InventoryItem, FloorPlanObject, DayOfWeek, OpeningHour, Customer } from '../types';
+import { Tenant, Outlet, User, MenuItem, InventoryItem, FloorPlanObject, DayOfWeek, OpeningHour, Customer, SuperAdminAccount } from '../types';
+
+// SuperAdmin Accounts (separate from restaurant users)
+export const MOCK_SUPER_ADMINS: SuperAdminAccount[] = [
+    { 
+        id: 'sa1', 
+        username: 'admin', 
+        password: 'admin123', // In production, this should be hashed
+        name: 'System Administrator',
+        email: 'admin@system.com'
+    },
+];
 
 export const MOCK_TENANTS: Tenant[] = [
     { id: 't1', name: 'The Pizza Palace', subdomain: 'pizzapalace', logoUrl: 'https://cdn-icons-png.flaticon.com/512/3595/3595458.png', settings: { currency: 'USD', timezone: 'UTC-5' } },
@@ -84,14 +95,16 @@ export const MOCK_OUTLETS: Outlet[] = [
 ];
 
 export const MOCK_USERS: User[] = [
+    // Tenant 1 users
     { id: 'u1', tenantId: 't1', name: 'Alice Admin', pin: '1111', role: 'BrandAdmin', assignedOutletIds: ['o1', 'o2'] },
     { id: 'u2', tenantId: 't1', name: 'Mike Manager', pin: '2222', role: 'OutletManager', assignedOutletIds: ['o1'] },
     { id: 'u3', tenantId: 't1', name: 'Charlie Cashier', pin: '3333', role: 'Cashier', assignedOutletIds: ['o1'] },
     { id: 'u4', tenantId: 't1', name: 'Kevin Kitchen', pin: '4444', role: 'KitchenStaff', assignedOutletIds: ['o1'] },
-    { id: 'u5', tenantId: 't2', name: 'Yuki Owner', pin: '5555', role: 'BrandAdmin', assignedOutletIds: ['o3'] },
-    { id: 'u6', tenantId: 't2', name: 'Kenji Cashier', pin: '6666', role: 'Cashier', assignedOutletIds: ['o3'] },
     { id: 'u7', tenantId: 't1', name: 'Walter Waiter', pin: '7777', role: 'Waiter', assignedOutletIds: ['o1'] },
     { id: 'u8', tenantId: 't1', name: 'Amy Accountant', pin: '8888', role: 'Accountant', assignedOutletIds: ['o1', 'o2'] },
+    // Tenant 2 users
+    { id: 'u5', tenantId: 't2', name: 'Yuki Owner', pin: '5555', role: 'BrandAdmin', assignedOutletIds: ['o3'] },
+    { id: 'u6', tenantId: 't2', name: 'Kenji Cashier', pin: '6666', role: 'Cashier', assignedOutletIds: ['o3'] },
 ];
 
 export const MOCK_INVENTORY: InventoryItem[] = [
@@ -233,7 +246,8 @@ export const MOCK_MENU_ITEMS: MenuItem[] = [
 
 // This function initializes the mock database in localStorage if it doesn't exist
 export const initializeDb = () => {
-    if (!localStorage.getItem('db_tenants')) {
+    // Check if superAdmins table exists, if not, reinitialize
+    if (!localStorage.getItem('db_tenants') || !localStorage.getItem('db_superAdmins')) {
         const MOCK_QR_ORDER = {
             id: 'ord_qr_12345',
             tenantId: 't1',
@@ -263,6 +277,7 @@ export const initializeDb = () => {
         localStorage.setItem('db_tenants', JSON.stringify(MOCK_TENANTS));
         localStorage.setItem('db_outlets', JSON.stringify(MOCK_OUTLETS));
         localStorage.setItem('db_users', JSON.stringify(MOCK_USERS));
+        localStorage.setItem('db_superAdmins', JSON.stringify(MOCK_SUPER_ADMINS));
         localStorage.setItem('db_menuItems', JSON.stringify(MOCK_MENU_ITEMS));
         localStorage.setItem('db_inventoryItems', JSON.stringify(MOCK_INVENTORY));
         localStorage.setItem('db_customers', JSON.stringify(MOCK_CUSTOMERS));

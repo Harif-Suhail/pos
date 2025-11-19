@@ -17,6 +17,7 @@ export interface AppContextType {
     currentOutlet: Outlet | null;
     allOutlets: Outlet[];
     currentUser: User | null;
+    isSuperAdminAuthenticated: boolean; // SuperAdmin authentication state
     activeOrders: Order[];
     completedOrders: Order[];
     parkedOrders: Order[]; // Held/parked orders
@@ -34,13 +35,14 @@ export interface AppContextType {
     isShiftModalOpen: boolean;
     
     // UI
-    currentView: 'pos' | 'kds' | 'reports' | 'inventory' | 'settings';
+    currentView: 'pos' | 'kds' | 'reports' | 'inventory' | 'settings' | 'admin';
 
     // API & Actions
     api: MockApi;
     getOutletsForTenant: (tenantId: string) => Promise<Outlet[]>;
     getUsersForOutlet: (outletId: string) => Promise<User[]>;
     login: (userId: string, pin: string) => Promise<void>;
+    loginSuperAdmin: (username: string, password: string) => Promise<void>;
     logout: () => void;
     syncData: () => Promise<void>;
     initializeQRSession: (outletId: string) => Promise<void>;
@@ -60,6 +62,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [currentOutlet, setCurrentOutlet] = useState<Outlet | null>(null);
     const [allOutlets, setAllOutlets] = useState<Outlet[]>([]);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [isSuperAdminAuthenticated, setIsSuperAdminAuthenticated] = useState<boolean>(
+        () => localStorage.getItem('superadmin_auth') === 'true'
+    );
 
     // Data State
     const [activeOrders, setActiveOrders] = useState<Order[]>([]);
@@ -208,6 +213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         
         const defaultViews: Record<UserRole, AppContextType['currentView']> = {
+            SuperAdmin: 'admin',
             BrandAdmin: 'reports',
             OutletManager: 'reports',
             Accountant: 'reports',
@@ -217,6 +223,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         setCurrentView(defaultViews[user.role] || 'pos');
     }, [api, isOnline]);
+
+    const loginSuperAdmin = useCallback(async (username: string, password: string) => {
+        const result = await api.loginSuperAdmin(username, password);
+        if (result) {
+            setIsSuperAdminAuthenticated(true);
+            localStorage.setItem('superadmin_auth', 'true');
+            setCurrentView('admin');
+            addToast('Welcome, Super Admin!', 'success');
+        }
+    }, [api]);
 
     const logout = useCallback(() => {
         api.logout();
@@ -229,6 +245,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFloorPlan([]);
         setInventory([]);
         setStockMovements([]);
+        setCurrentShift(null);
+        setCurrentView('pos');
+        
+        // Also clear SuperAdmin authentication
+        setIsSuperAdminAuthenticated(false);
+        localStorage.removeItem('superadmin_auth');
     }, [api]);
 
     const menuCategories = useMemo(() => {
@@ -242,6 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentOutlet,
         allOutlets,
         currentUser,
+        isSuperAdminAuthenticated,
         activeOrders,
         completedOrders,
         parkedOrders,
@@ -260,6 +283,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getOutletsForTenant,
         getUsersForOutlet,
         login,
+        loginSuperAdmin,
         logout,
         syncData,
         initializeQRSession,

@@ -183,6 +183,46 @@ class Api {
         this.userRole = null;
     }
 
+    async loginSuperAdmin(username: string, password: string): Promise<boolean> {
+        await this.simulateDelay(null, 100); // Small delay for auth to feel secure
+        
+        // Get SuperAdmin account from storage
+        const superAdmins = getTable<import('../types').SuperAdminAccount>('superAdmins');
+        
+        // Debug logging
+        console.log('SuperAdmin accounts found:', superAdmins);
+        console.log('Attempting login with username:', username);
+        
+        // If no superAdmins exist, create a default one
+        if (superAdmins.length === 0) {
+            const defaultAdmin: import('../types').SuperAdminAccount = {
+                id: 'sa1',
+                username: 'admin',
+                password: 'admin123',
+                name: 'System Administrator',
+                email: 'admin@system.com'
+            };
+            superAdmins.push(defaultAdmin);
+            setTable('superAdmins', superAdmins);
+            console.log('Created default SuperAdmin account');
+        }
+        
+        const admin = superAdmins.find(a => a.username === username && a.password === password);
+        
+        if (!admin) {
+            console.error('Login failed - no matching admin found');
+            throw new Error("Invalid username or password");
+        }
+
+        // Set authentication context for SuperAdmin
+        this.userId = admin.id;
+        this.userRole = 'SuperAdmin';
+        // SuperAdmin doesn't need tenant/outlet context
+        
+        console.log('SuperAdmin login successful:', admin.name);
+        return true;
+    }
+
     async login(userId: string, pin: string) {
         await this.simulateDelay(null, 100); // Small delay for auth to feel secure
         const users = getTable<User>('users');
@@ -1105,19 +1145,98 @@ class Api {
         return this.simulateDelay(undefined, 100);
     }
 
-    updateTenant = async(tenantData: Partial<Tenant>): Promise<Tenant | undefined> => {
+    // Tenant Management (SuperAdmin only)
+    createTenant = async(tenantData: Omit<Tenant, 'id'>): Promise<Tenant> => {
         if (!this.isOnline) {
-            this.queueAction('updateTenant', tenantData);
+            this.queueAction('createTenant', tenantData);
+            throw new Error("Cannot create tenant while offline");
+        }
+
+        const tenants = getTable<Tenant>('tenants');
+        
+        // Check if subdomain already exists
+        if (tenants.some(t => t.subdomain === tenantData.subdomain)) {
+            throw new Error("Subdomain already exists");
+        }
+
+        const tenant: Tenant = {
+            id: `tenant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            ...tenantData
+        };
+
+        addToTable('tenants', tenant);
+
+        // Log activity
+        await this.logActivity({
+            tenantId: tenant.id,
+            outletId: '',
+            userId: this.userId || 'system',
+            action: 'CREATE_TENANT',
+            details: { tenantId: tenant.id, tenantName: tenant.name }
+        });
+
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Tenant "${tenant.name}" created successfully`, 'success');
+        return this.simulateDelay(tenant, 100);
+    }
+
+    deleteTenant = async(tenantId: string): Promise<void> => {
+        if (!this.isOnline) {
+            this.queueAction('deleteTenant', tenantId);
+            throw new Error("Cannot delete tenant while offline");
+        }
+
+        const tenants = getTable<Tenant>('tenants');
+        const tenant = tenants.find(t => t.id === tenantId);
+        if (!tenant) throw new Error("Tenant not found");
+
+        // Check if tenant has any outlets
+        const outlets = getTable<Outlet>('outlets').filter(o => o.tenantId === tenantId);
+        if (outlets.length > 0) {
+            throw new Error(`Cannot delete tenant with ${outlets.length} active outlet(s). Delete outlets first.`);
+        }
+
+        deleteFromTable<Tenant>('tenants', tenantId);
+
+        // Also delete all users associated with this tenant
+        const users = getTable<User>('users').filter(u => u.tenantId === tenantId);
+        users.forEach(u => deleteFromTable<User>('users', u.id));
+
+        // Log activity
+        await this.logActivity({
+            tenantId: tenantId,
+            outletId: '',
+            userId: this.userId || 'system',
+            action: 'DELETE_TENANT',
+            details: { tenantId, tenantName: tenant.name }
+        });
+
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        if (this.toastCallback) this.toastCallback(`Tenant "${tenant.name}" deleted successfully`, 'success');
+        return this.simulateDelay(undefined, 100);
+    }
+
+    updateTenant = async(tenantId: string, tenantData: Partial<Omit<Tenant, 'id' | 'subdomain'>>): Promise<Tenant | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('updateTenant', tenantId, tenantData);
             return Promise.resolve(undefined);
         }
-        if (!this.tenantId) throw new Error("Not authenticated");
         
         const tenants = getTable<Tenant>('tenants');
-        const tenant = tenants.find(t => t.id === this.tenantId);
+        const tenant = tenants.find(t => t.id === tenantId);
         if (!tenant) throw new Error("Tenant not found");
 
         const updatedTenant = { ...tenant, ...tenantData };
         updateInTable('tenants', updatedTenant);
+
+        // Log activity
+        await this.logActivity({
+            tenantId: tenantId,
+            outletId: '',
+            userId: this.userId || 'system',
+            action: 'UPDATE_TENANT',
+            details: { tenantId, changes: tenantData }
+        });
 
         if (this.stateChangeCallback) this.stateChangeCallback();
         return this.simulateDelay(updatedTenant, 0); // Instant

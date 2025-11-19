@@ -11,6 +11,7 @@ const Header: React.FC = () => {
         currentTenant, 
         currentOutlet,
         currentShift,
+        isSuperAdminAuthenticated,
         logout, 
         currentView, 
         setCurrentView,
@@ -22,11 +23,50 @@ const Header: React.FC = () => {
         toggleTheme,
     } = useAppContext();
 
+    // Show header for regular users OR SuperAdmin on admin portal
+    if (isSuperAdminAuthenticated) {
+        // Simplified header for SuperAdmin
+        return (
+            <header className="bg-[var(--background-secondary)] shadow-md p-3 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                    <span className="text-3xl">⚡</span>
+                    <div>
+                        <h1 className="text-xl font-bold text-[var(--text-primary)]">Super Admin Portal</h1>
+                        <p className="text-xs text-[var(--text-secondary)]">System Administration</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                    {/* Theme Toggle */}
+                    <button onClick={toggleTheme} className="p-2 rounded-full text-[var(--text-secondary)] hover:bg-[var(--background-tertiary)] transition-colors" aria-label="Toggle theme">
+                        {theme === 'dark' ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 14.464A1 1 0 106.465 13.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 11a1 1 0 100-2H4a1 1 0 100 2h1z" clipRule="evenodd" />
+                            </svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                            </svg>
+                        )}
+                    </button>
+
+                    <div className="text-right">
+                        <p className="font-semibold text-[var(--text-primary)]">System Administrator</p>
+                        <p className="text-xs text-purple-400">Super Admin</p>
+                    </div>
+                    <button onClick={logout} className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-[var(--negative)] hover:bg-[var(--negative-hover)] text-[var(--accent-primary-text)]" aria-label="Logout">
+                        Logout
+                    </button>
+                </div>
+            </header>
+        );
+    }
+
     if (!currentUser || !currentTenant || !currentOutlet) return null;
 
     // Permission-based navigation with fallback to roles for compatibility
     const navLinks: { 
-        view: 'pos' | 'kds' | 'reports' | 'inventory' | 'settings'; 
+        view: 'pos' | 'kds' | 'reports' | 'inventory' | 'settings' | 'admin'; 
         label: string; 
         permission?: Permission;
         roles?: UserRole[];
@@ -61,6 +101,7 @@ const Header: React.FC = () => {
             permission: Permission.CAN_MANAGE_SETTINGS,
             roles: ['OutletManager', 'BrandAdmin'] 
         },
+        // Note: Admin Portal link removed - SuperAdmin should access via /admin route
     ];
 
     // Filter navigation links based on permissions
