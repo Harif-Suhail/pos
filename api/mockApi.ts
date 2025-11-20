@@ -21,6 +21,17 @@ const scheduleBatchWrite = () => {
     }, 100); // Batch writes every 100ms
 };
 
+const flushPendingWrites = () => {
+    if (batchUpdateTimer) {
+        clearTimeout(batchUpdateTimer);
+        batchUpdateTimer = null;
+    }
+    pendingWrites.forEach((data, tableName) => {
+        localStorage.setItem(`db_${tableName}`, JSON.stringify(data));
+    });
+    pendingWrites.clear();
+};
+
 // --- Helper Functions to simulate a DB ---
 const getTable = <T>(tableName: string): T[] => {
     // Check pending writes first
@@ -1166,17 +1177,158 @@ class Api {
 
         addToTable('tenants', tenant);
 
+        // Create a default outlet for the new tenant
+        const defaultOutlet: Outlet = {
+            id: `outlet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            tenantId: tenant.id,
+            name: `${tenant.name} - Main Outlet`,
+            address: 'Main Outlet Address',
+            settings: {
+                taxes: [
+                    { id: 'tax_vat', name: 'VAT', rate: 5, isInclusive: false },
+                    { id: 'tax_service', name: 'Service Tax', rate: 10, isInclusive: false }
+                ],
+                serviceCharge: {
+                    isEnabled: false,
+                    rate: 10
+                },
+                openingHours: [
+                    { day: 'Monday', open: '09:00', close: '22:00', isClosed: false },
+                    { day: 'Tuesday', open: '09:00', close: '22:00', isClosed: false },
+                    { day: 'Wednesday', open: '09:00', close: '22:00', isClosed: false },
+                    { day: 'Thursday', open: '09:00', close: '22:00', isClosed: false },
+                    { day: 'Friday', open: '09:00', close: '23:00', isClosed: false },
+                    { day: 'Saturday', open: '09:00', close: '23:00', isClosed: false },
+                    { day: 'Sunday', open: '10:00', close: '21:00', isClosed: false }
+                ],
+                printerSettings: {
+                    kitchenPrinters: {}
+                },
+                kitchenConfig: {}
+            },
+            floorPlan: []
+        };
+
+        addToTable('outlets', defaultOutlet);
+
+        // Create a default admin user for the new tenant
+        const defaultUser: User = {
+            id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: 'Admin',
+            role: 'BrandAdmin',
+            pin: '1234',
+            assignedOutletIds: [defaultOutlet.id],
+            tenantId: tenant.id
+        };
+
+        addToTable('users', defaultUser);
+
+        // Create default menu categories
+        const defaultCategories = ['Appetizers', 'Main Course', 'Beverages', 'Desserts'];
+        const categories = getTable<string>('menuCategories_' + tenant.id);
+        defaultCategories.forEach(cat => categories.push(cat));
+        setTable('menuCategories_' + tenant.id, categories);
+
+        // Create default menu items
+        const defaultMenuItems: MenuItem[] = [
+            {
+                id: `item_${Date.now()}_1`,
+                tenantId: tenant.id,
+                name: 'Caesar Salad',
+                description: 'Fresh romaine lettuce with caesar dressing',
+                category: 'Appetizers',
+                basePrice: 8.99,
+                image: 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400',
+                station: 'Main Kitchen',
+                variants: [],
+                modifierGroups: [],
+                recipe: [],
+                available: true
+            },
+            {
+                id: `item_${Date.now()}_2`,
+                tenantId: tenant.id,
+                name: 'Grilled Chicken',
+                description: 'Tender grilled chicken breast with herbs',
+                category: 'Main Course',
+                basePrice: 15.99,
+                image: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=400',
+                station: 'Main Kitchen',
+                variants: [],
+                modifierGroups: [],
+                recipe: [],
+                available: true
+            },
+            {
+                id: `item_${Date.now()}_3`,
+                tenantId: tenant.id,
+                name: 'Spaghetti Carbonara',
+                description: 'Classic Italian pasta with creamy sauce',
+                category: 'Main Course',
+                basePrice: 12.99,
+                image: 'https://images.unsplash.com/photo-1612874742237-6526221588e3?w=400',
+                station: 'Main Kitchen',
+                variants: [],
+                modifierGroups: [],
+                recipe: [],
+                available: true
+            },
+            {
+                id: `item_${Date.now()}_4`,
+                tenantId: tenant.id,
+                name: 'Coca Cola',
+                description: 'Classic soft drink',
+                category: 'Beverages',
+                basePrice: 2.99,
+                image: 'https://images.unsplash.com/photo-1554866585-cd94860890b7?w=400',
+                station: 'Bar',
+                variants: [],
+                modifierGroups: [],
+                recipe: [],
+                available: true
+            },
+            {
+                id: `item_${Date.now()}_5`,
+                tenantId: tenant.id,
+                name: 'Chocolate Cake',
+                description: 'Rich chocolate cake with frosting',
+                category: 'Desserts',
+                basePrice: 6.99,
+                image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400',
+                station: 'Desserts',
+                variants: [],
+                modifierGroups: [],
+                recipe: [],
+                available: true
+            }
+        ];
+
+        const menuItems = getTable<MenuItem>('menuItems');
+        defaultMenuItems.forEach(item => menuItems.push(item));
+        setTable('menuItems', menuItems);
+
+        // Flush all pending writes to localStorage immediately
+        flushPendingWrites();
+
         // Log activity
         await this.logActivity({
             tenantId: tenant.id,
-            outletId: '',
+            outletId: defaultOutlet.id,
             userId: this.userId || 'system',
             action: 'CREATE_TENANT',
-            details: { tenantId: tenant.id, tenantName: tenant.name }
+            details: { 
+                tenantId: tenant.id, 
+                tenantName: tenant.name,
+                outletId: defaultOutlet.id,
+                outletName: defaultOutlet.name,
+                userId: defaultUser.id,
+                userName: defaultUser.name,
+                userPin: defaultUser.pin
+            }
         });
 
         if (this.stateChangeCallback) this.stateChangeCallback();
-        if (this.toastCallback) this.toastCallback(`Tenant "${tenant.name}" created successfully`, 'success');
+        if (this.toastCallback) this.toastCallback(`Tenant "${tenant.name}" created successfully with default outlet and admin user (PIN: 1234)`, 'success');
         return this.simulateDelay(tenant, 100);
     }
 

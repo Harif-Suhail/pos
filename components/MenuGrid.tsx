@@ -30,7 +30,7 @@ const MenuItemCard: React.FC<{ item: MenuItem; onSelectItem: (item: MenuItem) =>
                     Unavailable
                 </div>
             )}
-            <img src={item.image} alt={item.name} className="w-full h-32 object-cover" />
+            <img src={item.image || 'https://worldfoodtour.co.uk/wp-content/uploads/2013/06/neptune-placeholder-48.jpg'} alt={item.name} className="w-full h-32 object-cover" />
             <div className="p-4">
                 <h3 className="font-semibold text-[var(--text-primary)] truncate">{item.name}</h3>
                 <p className="text-[var(--text-secondary)] mt-1">{formatCurrency(item.basePrice)}</p>
