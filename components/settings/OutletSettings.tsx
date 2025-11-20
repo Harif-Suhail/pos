@@ -2,18 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../hooks/useAppContext';
 import { Outlet, DayOfWeek, Tax, KitchenStation } from '../../types';
 import Spinner from '../common/Spinner';
+import Modal from '../common/Modal';
 
 const DAYS_OF_WEEK: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const KITCHEN_STATIONS: KitchenStation[] = ['Main Kitchen', 'Bar', 'Desserts'];
+const DEFAULT_KITCHEN_STATIONS: KitchenStation[] = ['Main Kitchen', 'Bar', 'Desserts'];
 
 const OutletSettings: React.FC = () => {
     const { currentOutlet, api, syncData, addToast } = useAppContext();
     const [settings, setSettings] = useState<Outlet['settings'] | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [showStationModal, setShowStationModal] = useState(false);
+    const [customStations, setCustomStations] = useState<string[]>([]);
 
     useEffect(() => {
         if (currentOutlet) {
             setSettings(JSON.parse(JSON.stringify(currentOutlet.settings)));
+            // Load custom stations from localStorage
+            const saved = localStorage.getItem(`custom_stations_${currentOutlet.id}`);
+            if (saved) {
+                setCustomStations(JSON.parse(saved));
+            }
         }
     }, [currentOutlet]);
 
@@ -56,6 +64,27 @@ const OutletSettings: React.FC = () => {
     const removeTax = (id: string) => {
         setSettings(prev => prev ? ({...prev, taxes: prev.taxes.filter(t => t.id !== id)}) : null);
     }
+
+    const allStations = [...DEFAULT_KITCHEN_STATIONS, ...customStations];
+
+    const handleAddCustomStation = (stationName: string) => {
+        if (!currentOutlet || !stationName.trim()) return;
+        const newStations = [...customStations, stationName.trim()];
+        setCustomStations(newStations);
+        localStorage.setItem(`custom_stations_${currentOutlet.id}`, JSON.stringify(newStations));
+        addToast(`Station "${stationName}" added successfully`, 'success');
+        setShowStationModal(false);
+    };
+
+    const handleRemoveCustomStation = (stationName: string) => {
+        if (!currentOutlet) return;
+        if (confirm(`Remove "${stationName}" station? This cannot be undone.`)) {
+            const newStations = customStations.filter(s => s !== stationName);
+            setCustomStations(newStations);
+            localStorage.setItem(`custom_stations_${currentOutlet.id}`, JSON.stringify(newStations));
+            addToast(`Station "${stationName}" removed`, 'success');
+        }
+    };
 
     return (
         <div className="bg-[var(--background-secondary)] p-6 rounded-lg shadow-lg max-w-4xl mx-auto">
@@ -119,22 +148,84 @@ const OutletSettings: React.FC = () => {
                         <label className="block text-sm font-medium text-[var(--text-tertiary)] mb-1">Receipt Printer IP Address / URL</label>
                         <input type="text" value={settings.printerSettings.receiptPrinterUrl || ''} onChange={e => handleFieldChange('printerSettings', 'receiptPrinterUrl', e.target.value)} className="input-style w-full" placeholder="e.g., 192.168.1.100"/>
                     </div>
-                    <h4 className="text-md font-bold text-[var(--text-primary)] mb-2">Kitchen Stations</h4>
+                    
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-md font-bold text-[var(--text-primary)]">Kitchen Stations</h4>
+                        <button
+                            onClick={() => setShowStationModal(true)}
+                            className="text-sm font-semibold text-[var(--accent-primary)] hover:opacity-80 flex items-center gap-1"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Custom Station
+                        </button>
+                    </div>
+                    <p className="text-sm text-[var(--text-secondary)] mb-4">
+                        Configure how orders are routed to kitchen stations. Choose KDS (Kitchen Display System) for on-screen display or Printer for physical tickets.
+                    </p>
                     <div className="space-y-2">
-                        {KITCHEN_STATIONS.map(station => (
-                            <div key={station} className="grid grid-cols-[1fr_2fr_2fr] items-center gap-4 py-2 border-t border-[var(--border-color)]">
-                                <span className="font-medium text-[var(--text-tertiary)]">{station}</span>
-                                <div className="flex items-center gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name={`${station}-config`} value="KDS" checked={!settings.kitchenConfig[station] || settings.kitchenConfig[station] === 'KDS'} onChange={() => setSettings(p => p ? ({ ...p, kitchenConfig: { ...p.kitchenConfig, [station]: 'KDS' } }) : null)} className="text-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"/><span>KDS</span></label>
-                                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name={`${station}-config`} value="Printer" checked={settings.kitchenConfig[station] === 'Printer'} onChange={() => setSettings(p => p ? ({ ...p, kitchenConfig: { ...p.kitchenConfig, [station]: 'Printer' } }) : null)} className="text-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"/><span>Printer</span></label>
+                        {allStations.map(station => {
+                            const isCustom = customStations.includes(station);
+                            return (
+                                <div key={station} className="grid grid-cols-[2fr_2fr_2fr_auto] items-center gap-4 py-2 border-t border-[var(--border-color)]">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium text-[var(--text-tertiary)]">{station}</span>
+                                        {isCustom && (
+                                            <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Custom</span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                name={`${station}-config`} 
+                                                value="KDS" 
+                                                checked={!settings.kitchenConfig[station as KitchenStation] || settings.kitchenConfig[station as KitchenStation] === 'KDS'} 
+                                                onChange={() => setSettings(p => p ? ({ ...p, kitchenConfig: { ...p.kitchenConfig, [station]: 'KDS' } }) : null)} 
+                                                className="text-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
+                                            />
+                                            <span>KDS</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                name={`${station}-config`} 
+                                                value="Printer" 
+                                                checked={settings.kitchenConfig[station as KitchenStation] === 'Printer'} 
+                                                onChange={() => setSettings(p => p ? ({ ...p, kitchenConfig: { ...p.kitchenConfig, [station]: 'Printer' } }) : null)} 
+                                                className="text-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
+                                            />
+                                            <span>Printer</span>
+                                        </label>
+                                    </div>
+                                    <div>
+                                        {settings.kitchenConfig[station as KitchenStation] === 'Printer' && (
+                                            <input 
+                                                type="text" 
+                                                placeholder="IP Address or URL" 
+                                                value={settings.printerSettings.kitchenPrinters[station as KitchenStation] || ''} 
+                                                onChange={e => setSettings(p => p ? ({...p, printerSettings: {...p.printerSettings, kitchenPrinters: {...p.printerSettings.kitchenPrinters, [station]: e.target.value}}}) : null)} 
+                                                className="input-style w-full" 
+                                            />
+                                        )}
+                                    </div>
+                                    <div>
+                                        {isCustom && (
+                                            <button
+                                                onClick={() => handleRemoveCustomStation(station)}
+                                                className="text-[var(--negative)] hover:opacity-75 p-1"
+                                                title="Remove station"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    {settings.kitchenConfig[station] === 'Printer' && (
-                                        <input type="text" placeholder="IP Address or URL" value={settings.printerSettings.kitchenPrinters[station] || ''} onChange={e => setSettings(p => p ? ({...p, printerSettings: {...p.printerSettings, kitchenPrinters: {...p.printerSettings.kitchenPrinters, [station]: e.target.value}}}) : null)} className="input-style w-full" />
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </SettingsSection>
 
@@ -145,7 +236,91 @@ const OutletSettings: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Add Custom Station Modal */}
+            {showStationModal && (
+                <StationModal
+                    onClose={() => setShowStationModal(false)}
+                    onAdd={handleAddCustomStation}
+                    existingStations={allStations}
+                />
+            )}
         </div>
+    );
+};
+
+const StationModal: React.FC<{
+    onClose: () => void;
+    onAdd: (name: string) => void;
+    existingStations: string[];
+}> = ({ onClose, onAdd, existingStations }) => {
+    const [stationName, setStationName] = useState('');
+    const [error, setError] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = stationName.trim();
+        
+        if (!trimmed) {
+            setError('Station name is required');
+            return;
+        }
+        
+        if (existingStations.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+            setError('A station with this name already exists');
+            return;
+        }
+        
+        onAdd(trimmed);
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Add Custom Kitchen Station">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                        Station Name
+                    </label>
+                    <input
+                        type="text"
+                        value={stationName}
+                        onChange={(e) => {
+                            setStationName(e.target.value);
+                            setError('');
+                        }}
+                        placeholder="e.g., Grill Station, Salad Bar, etc."
+                        className="w-full px-3 py-2 bg-[var(--background-tertiary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
+                        autoFocus
+                    />
+                    {error && (
+                        <p className="mt-2 text-sm text-red-400">{error}</p>
+                    )}
+                </div>
+                
+                <div className="bg-[var(--background-tertiary)] p-3 rounded-lg">
+                    <p className="text-xs text-[var(--text-secondary)]">
+                        💡 <strong>Tip:</strong> Custom stations can be used to organize your kitchen workflow. 
+                        For example: "Grill", "Fryer", "Cold Station", "Expediting", etc.
+                    </p>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-4">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 bg-[var(--background-tertiary)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background-interactive)] transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        className="px-4 py-2 bg-[var(--accent-primary)] text-[var(--accent-primary-text)] rounded-lg hover:opacity-90 transition-opacity font-semibold"
+                    >
+                        Add Station
+                    </button>
+                </div>
+            </form>
+        </Modal>
     );
 };
 
