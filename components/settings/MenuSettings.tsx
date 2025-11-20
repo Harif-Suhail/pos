@@ -1353,12 +1353,43 @@ const MenuItemEditModal: React.FC<MenuItemEditModalProps> = ({ item, categories,
                  </div>
             );
             case 'stock': 
-                const stockType = formData.recipe && formData.recipe.length > 0 ? 'recipe' : 'simple';
+                // Determine stock type: if stock field exists and recipe is undefined/empty, it's simple
+                // If recipe array exists (even if empty), it's recipe-based
+                const stockType = (formData.stock !== undefined && (!formData.recipe || formData.recipe.length === 0)) ? 'simple' : 'recipe';
+                
                 return (
                     <div>
                         <div className="flex gap-4 mb-4">
-                             <label><input type="radio" name="stockType" value="simple" checked={stockType === 'simple'} onChange={() => handleFieldChange('recipe', [])} /> Simple Stock Count</label>
-                             <label><input type="radio" name="stockType" value="recipe" checked={stockType === 'recipe'} onChange={() => handleFieldChange('stock', undefined)} /> Recipe-based Stock</label>
+                             <label className="cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="stockType" 
+                                    value="simple" 
+                                    checked={stockType === 'simple'} 
+                                    onChange={() => {
+                                        handleFieldChange('recipe', undefined);
+                                        if (formData.stock === undefined) {
+                                            handleFieldChange('stock', 0);
+                                        }
+                                    }} 
+                                    className="mr-2"
+                                /> 
+                                Simple Stock Count
+                             </label>
+                             <label className="cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="stockType" 
+                                    value="recipe" 
+                                    checked={stockType === 'recipe'} 
+                                    onChange={() => {
+                                        handleFieldChange('stock', undefined);
+                                        handleFieldChange('recipe', formData.recipe || []);
+                                    }} 
+                                    className="mr-2"
+                                /> 
+                                Recipe-based Stock
+                             </label>
                         </div>
                         {stockType === 'simple' ? (
                              <div>
@@ -1368,25 +1399,32 @@ const MenuItemEditModal: React.FC<MenuItemEditModalProps> = ({ item, categories,
                              </div>
                         ) : (
                             <div className="space-y-2">
-                                {formData.recipe?.map((comp, index) => (
-                                    <div key={comp.inventoryItemId} className="flex items-center gap-2">
-                                        <span className="flex-grow bg-[var(--background-primary)] p-2 rounded border border-[var(--border-color)]">
-                                            {inventory.find(i => i.id === comp.inventoryItemId)?.name}
-                                        </span>
-                                        <input type="number" value={comp.quantity} onChange={e => {
-                                            const newRecipe = [...formData.recipe!];
-                                            newRecipe[index].quantity = parseFloat(e.target.value) || 0;
-                                            handleFieldChange('recipe', newRecipe);
-                                        }} className="w-1/4 bg-[var(--background-primary)] p-2 rounded border border-[var(--border-color)]" />
-                                        <span>{inventory.find(i => i.id === comp.inventoryItemId)?.unit}</span>
-                                        <button onClick={() => handleFieldChange('recipe', formData.recipe?.filter(r => r.inventoryItemId !== comp.inventoryItemId))} className="text-[var(--negative)] p-2">&times;</button>
+                                {formData.recipe && formData.recipe.length > 0 ? (
+                                    formData.recipe.map((comp, index) => (
+                                        <div key={comp.inventoryItemId} className="flex items-center gap-2">
+                                            <span className="flex-grow bg-[var(--background-primary)] p-2 rounded border border-[var(--border-color)]">
+                                                {inventory.find(i => i.id === comp.inventoryItemId)?.name}
+                                            </span>
+                                            <input type="number" value={comp.quantity} onChange={e => {
+                                                const newRecipe = [...formData.recipe!];
+                                                newRecipe[index].quantity = parseFloat(e.target.value) || 0;
+                                                handleFieldChange('recipe', newRecipe);
+                                            }} className="w-1/4 bg-[var(--background-primary)] p-2 rounded border border-[var(--border-color)]" />
+                                            <span>{inventory.find(i => i.id === comp.inventoryItemId)?.unit}</span>
+                                            <button onClick={() => handleFieldChange('recipe', formData.recipe?.filter(r => r.inventoryItemId !== comp.inventoryItemId))} className="text-[var(--negative)] p-2">&times;</button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-4 text-[var(--text-secondary)] bg-[var(--background-primary)] rounded border border-[var(--border-color)]">
+                                        No ingredients added yet. Use the dropdown below to add ingredients.
                                     </div>
-                                ))}
+                                )}
                                 <div className="flex gap-2">
                                     <select className="flex-grow bg-[var(--background-tertiary)] p-2 rounded" onChange={e => {
                                         if (e.target.value && !formData.recipe?.some(r => r.inventoryItemId === e.target.value)) {
                                              handleFieldChange('recipe', [...(formData.recipe || []), { inventoryItemId: e.target.value, quantity: 1 }])
                                         }
+                                        e.target.value = ''; // Reset dropdown after selection
                                     }} value="">
                                         <option value="">-- Add an ingredient --</option>
                                         {inventory.map(invItem => (
