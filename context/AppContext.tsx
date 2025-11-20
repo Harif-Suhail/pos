@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { Tenant, Outlet, User, Order, MenuItem, FloorPlanObject, Shift, InventoryItem, StockMovement, UserRole } from '../types';
+import { Tenant, Outlet, User, Order, MenuItem, FloorPlanObject, Shift, InventoryItem, StockMovement, UserRole, Permission, ROLE_PERMISSIONS } from '../types';
 import { api as mockApi, MockApi } from '../api/mockApi';
 
 export type Theme = 'dark' | 'light';
@@ -51,6 +51,7 @@ export interface AppContextType {
     setIsOnline: (isOnline: boolean) => void;
     toggleTheme: () => void;
     addToast: (message: string, type?: ToastType) => void;
+    hasPermission: (permission: Permission) => boolean;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -271,6 +272,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.removeItem('superadmin_auth');
     }, [api]);
 
+    const hasPermission = useCallback((permission: Permission): boolean => {
+        if (!currentUser) return false;
+        
+        // If user has custom permissions, check those first
+        if (currentUser.permissions && currentUser.permissions.length > 0) {
+            return currentUser.permissions.includes(permission);
+        }
+        
+        // Otherwise, check role-based permissions
+        const rolePermissions = ROLE_PERMISSIONS[currentUser.role];
+        return rolePermissions.includes(permission);
+    }, [currentUser]);
+
     const menuCategories = useMemo(() => {
         const categories = new Set(menuItems.map(item => item.category));
         return Array.from(categories);
@@ -310,6 +324,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsOnline,
         toggleTheme,
         addToast,
+        hasPermission,
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

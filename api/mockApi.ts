@@ -723,6 +723,90 @@ class Api {
         return this.simulateDelay(item, 0); // Instant
     };
 
+    createInventoryItem = async(item: Omit<InventoryItem, 'id'>): Promise<InventoryItem> => {
+        if (!this.isOnline) {
+            this.queueAction('createInventoryItem', item);
+            return Promise.resolve({ ...item, id: `inv_temp_${Date.now()}` } as InventoryItem);
+        }
+
+        const newItem: InventoryItem = {
+            ...item,
+            id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        };
+
+        addToTable('inventoryItems', newItem);
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(newItem, 0);
+    };
+
+    updateInventoryItem = async(itemId: string, updates: Partial<InventoryItem>): Promise<InventoryItem | undefined> => {
+        if (!this.isOnline) {
+            this.queueAction('updateInventoryItem', itemId, updates);
+            return Promise.resolve(undefined);
+        }
+
+        const items = getTable<InventoryItem>('inventoryItems');
+        const item = items.find(i => i.id === itemId);
+        if (!item) throw new Error("Inventory item not found");
+
+        const updatedItem = { ...item, ...updates };
+        updateInTable('inventoryItems', updatedItem);
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(updatedItem, 0);
+    };
+
+    deleteInventoryItem = async(itemId: string): Promise<boolean> => {
+        if (!this.isOnline) {
+            this.queueAction('deleteInventoryItem', itemId);
+            return Promise.resolve(false);
+        }
+
+        // Check if item is used in any recipes
+        const menuItems = getTable<MenuItem>('menuItems');
+        const isUsedInRecipe = menuItems.some(m => m.recipe?.some(r => r.inventoryItemId === itemId));
+        
+        if (isUsedInRecipe) {
+            throw new Error("Cannot delete inventory item - it's used in menu item recipes");
+        }
+
+        const items = getTable<InventoryItem>('inventoryItems');
+        const filteredItems = items.filter(i => i.id !== itemId);
+        localStorage.setItem('db_inventoryItems', JSON.stringify(filteredItems));
+        
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(true, 0);
+    };
+
+    recordWastage = async(inventoryItemId: string, outletId: string, quantity: number, reason: string): Promise<void> => {
+        if (!this.isOnline) {
+            this.queueAction('recordWastage', inventoryItemId, outletId, quantity, reason);
+            return Promise.resolve();
+        }
+
+        const items = getTable<InventoryItem>('inventoryItems');
+        const item = items.find(i => i.id === inventoryItemId);
+        if (!item) throw new Error("Inventory item not found");
+
+        const currentStock = item.stockByOutlet[outletId] || 0;
+        item.stockByOutlet[outletId] = Math.max(0, currentStock - quantity);
+        updateInTable('inventoryItems', item);
+
+        addToTable<StockMovement>('stockMovements', {
+            id: `sm_${Date.now()}_${Math.random()}`,
+            tenantId: this.tenantId!,
+            outletId: outletId,
+            inventoryItemId: inventoryItemId,
+            type: 'WASTAGE',
+            quantityChange: -quantity,
+            reason: reason,
+            processedBy: this.userId || 'system',
+            timestamp: Date.now()
+        });
+
+        if (this.stateChangeCallback) this.stateChangeCallback();
+        return this.simulateDelay(undefined, 0);
+    };
+
     // Shift Management
     getCurrentShift = async (): Promise<Shift | null> => {
         const shifts = getTable<Shift>('shifts');
